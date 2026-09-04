@@ -686,3 +686,340 @@
     }
 
 })();
+
+// ============================================================
+// Phase 2 — Routes, Mutations, Simulator, Diff
+// ============================================================
+
+(function() {
+
+    // ---- Tab init for Phase 2 tabs ----
+    document.addEventListener('DOMContentLoaded', function() {
+        var routesTab = document.querySelector('[data-tab="routes"]');
+        var mutTab    = document.querySelector('[data-tab="mutations"]');
+        var simTab    = document.querySelector('[data-tab="simulator"]');
+        if (routesTab) routesTab.addEventListener('click', fetchRoutes);
+        if (mutTab)    mutTab.addEventListener('click', fetchMutations);
+        if (simTab)    simTab.addEventListener('click', fetchSimulations);
+
+        var addRouteBtn = document.getElementById('btn-add-route');
+        var addMutBtn   = document.getElementById('btn-add-mutation');
+        var addSimBtn   = document.getElementById('btn-add-sim');
+        if (addRouteBtn) addRouteBtn.addEventListener('click', promptAddRoute);
+        if (addMutBtn)   addMutBtn.addEventListener('click', promptAddMutation);
+        if (addSimBtn)   addSimBtn.addEventListener('click', promptAddSim);
+    });
+
+    // ============================================================
+    // Routes
+    // ============================================================
+    async function fetchRoutes() {
+        try {
+            var resp = await fetch('/api/routes');
+            var data = await resp.json();
+            renderRoutes(data.routes || []);
+        } catch(e) {
+            console.error('[routa] fetch routes:', e);
+        }
+    }
+
+    function renderRoutes(routes) {
+        var el = document.getElementById('routes-list');
+        if (!routes.length) {
+            el.innerHTML = '<div class="empty-state"><p>No routes configured</p><p class="empty-sub">Routes direct URL patterns to different local services. Default: all traffic to the CLI port.</p></div>';
+            return;
+        }
+        el.innerHTML = routes.map(function(r, i) {
+            return '<div class="rule-card">' +
+                '<div class="rule-info">' +
+                  '<div class="rule-name">' + esc(r.name || 'Route ' + (i+1)) + '</div>' +
+                  '<div class="rule-detail">' + esc(r.pattern) + ' ? ' + esc(r.target) + '</div>' +
+                '</div>' +
+                '<div style="display:flex;gap:6px">' +
+                  '<button class="btn btn-ghost btn-sm btn-del-route" data-idx="' + i + '">Delete</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+
+        el.querySelectorAll('.btn-del-route').forEach(function(btn) {
+            btn.addEventListener('click', async function() {
+                var resp2 = await fetch('/api/routes');
+                var data2 = await resp2.json();
+                var r2 = (data2.routes || []).filter(function(_, j) { return j !== parseInt(btn.dataset.idx); });
+                await fetch('/api/routes', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({routes: r2})});
+                fetchRoutes();
+                showToast2('Route deleted', 'info');
+            });
+        });
+    }
+
+    function promptAddRoute() {
+        var pattern = prompt('URL pattern (e.g. /api/* or /health):', '/api/*');
+        if (!pattern) return;
+        var target = prompt('Target URL (e.g. http://localhost:3001):', 'http://localhost:3001');
+        if (!target) return;
+        var name = prompt('Name (optional):', '');
+
+        fetch('/api/routes').then(function(r) { return r.json(); }).then(async function(data) {
+            var routes = data.routes || [];
+            routes.push({ pattern: pattern, target: target, name: name });
+            await fetch('/api/routes', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({routes: routes})});
+            fetchRoutes();
+            showToast2('Route added', 'success');
+        });
+    }
+
+    // ============================================================
+    // Mutations
+    // ============================================================
+    async function fetchMutations() {
+        try {
+            var resp = await fetch('/api/mutations');
+            var data = await resp.json();
+            renderMutations(data.mutations || []);
+        } catch(e) {
+            console.error('[routa] fetch mutations:', e);
+        }
+    }
+
+    function renderMutations(mutations) {
+        var el = document.getElementById('mutations-list');
+        if (!mutations.length) {
+            el.innerHTML = '<div class="empty-state"><p>No mutation rules</p><p class="empty-sub">Add rules to modify headers, paths, query params, or JSON bodies in-flight</p></div>';
+            return;
+        }
+        el.innerHTML = mutations.map(function(m, i) {
+            var tags = [];
+            if (m.request && Object.keys(m.request.set_headers || {}).length) tags.push('<span class="rule-tag">+req headers</span>');
+            if (m.request && m.request.strip_path_prefix) tags.push('<span class="rule-tag">strip path</span>');
+            if (m.response && m.response.mock_status) tags.push('<span class="rule-tag mock">mock ' + m.response.mock_status + '</span>');
+            if (m.response && m.response.force_status) tags.push('<span class="rule-tag warn">force ' + m.response.force_status + '</span>');
+
+            var matchStr = (m.match && m.match.method ? m.match.method + ' ' : 'ANY ') + (m.match && m.match.path ? m.match.path : '*');
+
+            return '<div class="rule-card">' +
+                '<div class="rule-info">' +
+                  '<div class="rule-name">' + esc(m.name || 'Rule ' + (i+1)) + '</div>' +
+                  '<div class="rule-match"><span>Matches:</span><code>' + esc(matchStr) + '</code>' + tags.join('') + '</div>' +
+                '</div>' +
+                '<button class="btn btn-ghost btn-sm btn-del-mut" data-idx="' + i + '">Delete</button>' +
+            '</div>';
+        }).join('');
+
+        el.querySelectorAll('.btn-del-mut').forEach(function(btn) {
+            btn.addEventListener('click', async function() {
+                var resp2 = await fetch('/api/mutations');
+                var data2 = await resp2.json();
+                var m2 = (data2.mutations || []).filter(function(_, j) { return j !== parseInt(btn.dataset.idx); });
+                await fetch('/api/mutations', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mutations: m2})});
+                fetchMutations();
+                showToast2('Mutation deleted', 'info');
+            });
+        });
+    }
+
+    function promptAddMutation() {
+        var name = prompt('Rule name:', 'my-mutation');
+        if (!name) return;
+        var matchPath = prompt('Match path prefix (e.g. /api/* or leave blank for all):', '');
+        var method    = prompt('Match method (e.g. POST, or blank for any):', '');
+
+        var headerKey = prompt('Add request header key (or blank to skip):', '');
+        var rule = { name: name, match: { path: matchPath, method: method }, request: {}, response: {} };
+        if (headerKey) {
+            var headerVal = prompt('Value for ' + headerKey + ':', '');
+            rule.request.set_headers = {};
+            rule.request.set_headers[headerKey] = headerVal;
+        }
+
+        var mockStatus = prompt('Mock response status (e.g. 200, or blank to skip):', '');
+        if (mockStatus) {
+            rule.response.mock_status = parseInt(mockStatus);
+            rule.response.mock_body = prompt('Mock body JSON:', '{"mocked":true}');
+        }
+
+        fetch('/api/mutations').then(function(r) { return r.json(); }).then(async function(data) {
+            var muts = data.mutations || [];
+            muts.push(rule);
+            await fetch('/api/mutations', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mutations: muts})});
+            fetchMutations();
+            showToast2('Mutation added', 'success');
+        });
+    }
+
+    // ============================================================
+    // Simulator
+    // ============================================================
+    async function fetchSimulations() {
+        try {
+            var resp = await fetch('/api/simulations');
+            var data = await resp.json();
+            renderSimulations(data.simulations || []);
+        } catch(e) {
+            console.error('[routa] fetch sims:', e);
+        }
+    }
+
+    function renderSimulations(sims) {
+        var el = document.getElementById('sim-list');
+        if (!sims.length) {
+            el.innerHTML = '<div class="empty-state"><p>No simulation rules</p><p class="empty-sub">Inject latency, errors, drops, or timeouts to test how your app handles failures</p></div>';
+            return;
+        }
+        el.innerHTML = sims.map(function(s, i) {
+            var tags = [];
+            if (s.delay_ms)    tags.push('<span class="rule-tag">' + s.delay_ms + 'ms delay</span>');
+            if (s.jitter_ms)   tags.push('<span class="rule-tag">±' + s.jitter_ms + 'ms jitter</span>');
+            if (s.error_rate)  tags.push('<span class="rule-tag warn">' + Math.round(s.error_rate*100) + '% errors</span>');
+            if (s.drop)        tags.push('<span class="rule-tag drop">drop</span>');
+            if (s.timeout_ms)  tags.push('<span class="rule-tag warn">' + s.timeout_ms + 'ms timeout</span>');
+
+            var matchStr = (s.match && s.match.method ? s.match.method + ' ' : 'ANY ') + (s.match && s.match.path ? s.match.path : '*');
+
+            return '<div class="rule-card">' +
+                '<div class="rule-info">' +
+                  '<div class="rule-name">' + esc(s.name || 'Sim ' + (i+1)) + '</div>' +
+                  '<div class="rule-match"><span>Matches:</span><code>' + esc(matchStr) + '</code>' + tags.join('') + '</div>' +
+                '</div>' +
+                '<button class="btn btn-ghost btn-sm btn-del-sim" data-idx="' + i + '">Delete</button>' +
+            '</div>';
+        }).join('');
+
+        el.querySelectorAll('.btn-del-sim').forEach(function(btn) {
+            btn.addEventListener('click', async function() {
+                var resp2 = await fetch('/api/simulations');
+                var data2 = await resp2.json();
+                var s2 = (data2.simulations || []).filter(function(_, j) { return j !== parseInt(btn.dataset.idx); });
+                await fetch('/api/simulations', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({simulations: s2})});
+                fetchSimulations();
+                showToast2('Simulation deleted', 'info');
+            });
+        });
+    }
+
+    function promptAddSim() {
+        var name = prompt('Rule name:', 'latency-test');
+        if (!name) return;
+        var matchPath = prompt('Match path prefix (blank for all):', '');
+        var method    = prompt('Match method (blank for any):', '');
+        var delayMs   = parseInt(prompt('Delay (ms, 0 to skip):', '500') || '0');
+        var jitterMs  = parseInt(prompt('Jitter ±ms (0 to skip):', '100') || '0');
+        var errorRate = parseFloat(prompt('Error rate 0.0-1.0 (0 to skip):', '0') || '0');
+        var errorSts  = parseInt(prompt('Error status code:', '503') || '503');
+        var dropStr   = prompt('Drop connection? (yes/no):', 'no');
+
+        var rule = {
+            name: name,
+            match: { path: matchPath, method: method },
+            delay_ms: delayMs,
+            jitter_ms: jitterMs,
+            error_rate: errorRate,
+            error_status: errorSts,
+            drop: dropStr === 'yes'
+        };
+
+        fetch('/api/simulations').then(function(r) { return r.json(); }).then(async function(data) {
+            var sims = data.simulations || [];
+            sims.push(rule);
+            await fetch('/api/simulations', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({simulations: sims})});
+            fetchSimulations();
+            showToast2('Simulation added', 'success');
+        });
+    }
+
+    // ============================================================
+    // Diff View
+    // ============================================================
+    window.loadDiff = async function(entryId) {
+        var el = document.getElementById('diff-content');
+        if (!el) return;
+        try {
+            var resp = await fetch('/api/requests/' + entryId + '/diff');
+            if (!resp.ok) {
+                el.innerHTML = '<div class="diff-none">No diff available — replay this request first</div>';
+                return;
+            }
+            var diff = await resp.json();
+            if (!diff) {
+                el.innerHTML = '<div class="diff-none">No differences found</div>';
+                return;
+            }
+            var html = '';
+
+            // Status diff
+            html += '<div class="diff-section"><h4>Status</h4>';
+            if (diff.status_diff) {
+                html += '<div class="diff-status">' + esc(diff.status_diff) + '</div>';
+            } else {
+                html += '<div class="diff-status unchanged">Unchanged</div>';
+            }
+            html += '</div>';
+
+            // Headers diff
+            html += '<div class="diff-section"><h4>Headers</h4>';
+            var hkeys = Object.keys(diff.headers_diff || {});
+            if (hkeys.length) {
+                html += hkeys.map(function(k) {
+                    return '<div class="diff-header-item"><div class="diff-header-key">' + esc(k) + '</div><div class="diff-header-val">' + esc(diff.headers_diff[k]) + '</div></div>';
+                }).join('');
+            } else {
+                html += '<div class="diff-none">No header changes</div>';
+            }
+            html += '</div>';
+
+            // Body diff
+            html += '<div class="diff-section"><h4>Body</h4>';
+            if (diff.body_diff) {
+                var lines = diff.body_diff.split('\n');
+                var formatted = lines.map(function(l) {
+                    if (l.startsWith('+')) return '<span class="diff-line-add">' + esc(l) + '</span>';
+                    if (l.startsWith('-')) return '<span class="diff-line-remove">' + esc(l) + '</span>';
+                    if (l.startsWith('~')) return '<span class="diff-line-change">' + esc(l) + '</span>';
+                    return esc(l);
+                }).join('\n');
+                html += '<pre class="diff-body-pre">' + formatted + '</pre>';
+            } else {
+                html += '<div class="diff-none">Body unchanged</div>';
+            }
+            html += '</div>';
+
+            el.innerHTML = html;
+        } catch(e) {
+            el.innerHTML = '<div class="diff-none">Error loading diff: ' + esc(String(e)) + '</div>';
+        }
+    };
+
+    // Hook into detail tab switches to auto-load diff when switching to Diff tab
+    document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('click', function(e) {
+            var tab = e.target.closest('.detail-tab');
+            if (tab && tab.dataset.detail === 'diff') {
+                // Get currently selected entry
+                var active = document.querySelector('.request-item.active');
+                if (active && window.loadDiff) window.loadDiff(active.dataset.id);
+            }
+        });
+    });
+
+    // Helpers
+    function esc(str) {
+        if (!str && str !== 0) return '';
+        var d = document.createElement('div');
+        d.textContent = String(str);
+        return d.innerHTML;
+    }
+
+    function showToast2(msg, type) {
+        var c = document.getElementById('toast-container');
+        if (!c) return;
+        var t = document.createElement('div');
+        t.className = 'toast ' + (type || 'info');
+        t.textContent = msg;
+        c.appendChild(t);
+        setTimeout(function() {
+            t.style.animation = 'slideOutRight 0.3s ease forwards';
+            setTimeout(function() { t.remove(); }, 300);
+        }, 3000);
+    }
+
+})();

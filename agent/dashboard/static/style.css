@@ -1045,3 +1045,183 @@ body {
     .request-item { grid-template-columns: 56px 1fr 48px 60px; }
     .request-time { display: none; }
 }
+
+/* ============================================================
+   Phase 2 — Panel Headers, Rules, Diff View
+   ============================================================ */
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.panel-header h2 {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.panel-desc {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-top: 3px;
+}
+
+/* Rule cards (routes, mutations, simulations) */
+.rule-card {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    transition: background var(--transition-fast);
+    gap: 16px;
+}
+
+.rule-card:hover {
+    background: var(--bg-hover);
+}
+
+.rule-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.rule-name {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.rule-detail {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+}
+
+.rule-match {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.rule-tag {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--accent-primary);
+}
+
+.rule-tag.warn {
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--warning);
+}
+
+.rule-tag.error {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--error);
+}
+
+.rule-tag.drop {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--error);
+}
+
+.rule-tag.mock {
+    background: rgba(168, 85, 247, 0.15);
+    color: var(--accent-secondary);
+}
+
+/* Diff View */
+.diff-section {
+    margin-bottom: 20px;
+}
+
+.diff-section h4 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+    margin-bottom: 8px;
+}
+
+.diff-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: var(--warning-bg);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--warning);
+    font-weight: 600;
+}
+
+.diff-status.unchanged {
+    background: var(--success-bg);
+    border-color: rgba(34, 197, 94, 0.2);
+    color: var(--success);
+}
+
+.diff-header-item {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 1px;
+    background: var(--border);
+    margin-bottom: 1px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.diff-header-key {
+    padding: 5px 10px;
+    background: var(--bg-tertiary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-accent);
+}
+
+.diff-header-val {
+    padding: 5px 10px;
+    background: var(--bg-tertiary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--warning);
+    word-break: break-all;
+}
+
+.diff-body-pre {
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.diff-line-add { color: var(--success); }
+.diff-line-remove { color: var(--error); }
+.diff-line-change { color: var(--warning); }
+
+.diff-none {
+    color: var(--text-tertiary);
+    font-size: 12px;
+    font-style: italic;
+    padding: 8px;
+}
