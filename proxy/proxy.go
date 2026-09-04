@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"routa/recorder"
+	"routa/protocol"
 )
 
 // Forwarder sends HTTP requests to a local target and captures timing.
@@ -80,8 +80,8 @@ func (f *Forwarder) Forward(method, targetURL string, headers map[string][]strin
 		StatusCode: resp.StatusCode,
 		Headers:    respHeaders,
 		Body:       respBody,
-		Timing: recorder.TimingBreakdown{
-			Total: total.Milliseconds(),
+		Timing: &protocol.TimingInfo{
+			Total: total,
 		},
 	}, nil
 }
@@ -91,5 +91,5 @@ type Response struct {
 	StatusCode int
 	Headers    map[string][]string
 	Body       []byte
-	Timing     recorder.TimingBreakdown
+	Timing     *protocol.TimingInfo
 }

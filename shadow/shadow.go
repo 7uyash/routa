@@ -3,7 +3,6 @@ package shadow
 import (
 	"bytes"
 	"io"
-	"log"
 	"net/http"
 	"sync"
 	"time"

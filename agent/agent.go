@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -190,15 +189,13 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 	// If mock response is injected, skip everything else
 	if mutReq.MockResponse != nil {
 		entry.StatusCode = mutReq.MockResponse.Status
-		entry.ResponseHeaders = mutReq.MockResponse.Headers // Type needs mapping
-		entry.ResponseBody = mutReq.MockResponse.Body
-		entry.Duration = time.Since(start)
-
 		hdr := make(map[string][]string)
 		for k, v := range mutReq.MockResponse.Headers {
 			hdr[k] = []string{v}
 		}
 		entry.ResponseHeaders = hdr
+		entry.ResponseBody = mutReq.MockResponse.Body
+		entry.Duration = time.Since(start)
 
 		a.recorder.Record(entry)
 		a.sendHTTPResponse(frame.RequestID, entry.StatusCode, hdr, entry.ResponseBody)

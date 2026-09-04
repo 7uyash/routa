@@ -38,6 +38,7 @@ type DashboardServer struct {
 	cfg      config.Config
 	server   *http.Server
 	upgrader websocket.Upgrader
+	agent    *Agent // back-pointer for hot-reloading routes/mutations
 
 	// WebSocket clients for live updates.
 	wsMu    sync.RWMutex

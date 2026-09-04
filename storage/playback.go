@@ -48,11 +48,7 @@ func (p *PlaybackEngine) Play(ctx context.Context, opts PlaybackOptions) error {
 	// in chronological order (oldest first).
 	// In recorder, usually newest is at front if we use List, but All() depends on implementation.
 	// For playback, we'll sort them by timestamp.
-	entries := make([]*recorder.Entry, len(session.Entries))
-	for i, e := range session.Entries {
-		eCopy := e // pointer to copy
-		entries[i] = &eCopy
-	}
+	entries := session.Entries
 
 	// Sort chronologically
 	for i := 0; i < len(entries)-1; i++ {
