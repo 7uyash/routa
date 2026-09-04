@@ -118,6 +118,17 @@ func (c *Client) Connect(ctx context.Context) error {
 	backoff := time.Second
 	maxBackoff := 30 * time.Second
 
+	if c.relayURL == "" {
+		c.state.Store(int32(StateDisconnected))
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-c.stopCh:
+			return nil
+		}
+	}
+
+	attempt := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -127,14 +138,17 @@ func (c *Client) Connect(ctx context.Context) error {
 		default:
 		}
 
+		attempt++
 		c.state.Store(int32(StateConnecting))
 		err := c.dial(ctx)
 		if err != nil {
-			log.Printf("[tunnel] connection failed: %v", err)
+			if attempt == 1 {
+				log.Printf("[tunnel] unable to connect to relay %s (retrying in background...)", c.relayURL)
+			}
 		}
 
 		c.state.Store(int32(StateDisconnected))
-		if c.OnDisconnect != nil {
+		if c.OnDisconnect != nil && err == nil {
 			c.OnDisconnect()
 		}
 

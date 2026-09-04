@@ -22,7 +22,7 @@ We aim to foster an open, welcoming, and inclusive community. Please be respectf
 1. Fork the repository on GitHub.
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/routa.git
+   git clone https://github.com/7uyash/routa.git
    cd routa
    ```
 3. Add the upstream repository:

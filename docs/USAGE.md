@@ -19,25 +19,47 @@ This guide covers everything you need to know to get started with Routa, from CL
 
 ---
 
-## Getting Started
+## 🚀 1-Minute Quick Start (First-Time Users)
 
-### Installation
+If someone wants to use Routa on their machine for the first time, here are the **3 simplest steps**:
 
-Build Routa from source using Go 1.21+:
-
+### Step 1: Install Routa
+Run this command in your terminal (requires Go 1.21+):
 ```bash
-git clone https://github.com/your-username/routa.git
-cd routa
-go build -o routa ./cmd/routa
+go install github.com/7uyash/routa/cmd/routa@latest
+```
+*(Or download pre-compiled `routa.exe` directly from GitHub Releases).*
+
+### Step 2: Start Routa with your app's port
+If your local backend app (e.g. Node.js, Python, Go, Java) is running on port **`3000`**, start Routa:
+```bash
+routa dev 3000
 ```
 
-Alternatively, add `routa` to your system `PATH`:
+### Step 3: Open the Dashboard
+Open your browser to:
+👉 **`http://localhost:4040`**
 
-```bash
-go install ./cmd/routa
-```
+That's it! Every request sent to your local app will now appear live in the Routa Dashboard with full headers, body, timing, and 1-click request replay.
 
 ---
+
+## ⚡ Modes of Operation
+
+### Mode 1: Local Traffic Inspector (Default)
+When you run `routa dev 3000`, Routa acts as a high-performance local proxy and inspector for port 3000. It opens the Web Dashboard on port `4040` with 0 external setup needed.
+
+### Mode 2: Public Tunneling Gateway (Expose Local App)
+If you want to expose your local server to the internet or test external webhooks via a public URL:
+
+1. In Terminal 1, start the Relay edge server:
+   ```bash
+   routa relay
+   ```
+2. In Terminal 2, start Routa pointing to the relay:
+   ```bash
+   routa dev 3000 --relay ws://localhost:8080
+   ```
 
 ## CLI Reference
 

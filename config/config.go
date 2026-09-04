@@ -41,7 +41,7 @@ func DefaultConfig() Config {
 	homeDir, _ := os.UserHomeDir()
 	return Config{
 		LocalHost:          "127.0.0.1",
-		RelayURL:           "ws://localhost:8080",
+		RelayURL:           "",
 		DashboardPort:      4040,
 		MaxRecordedEntries: 500,
 		RelayPort:          8080,
