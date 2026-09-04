@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Routa — Developer Traffic Gateway Inspector">
+    <title>Routa — Traffic Inspector</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Top Status Bar -->
+    <header id="status-bar">
+        <div class="status-left">
+            <div class="logo">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                    <circle cx="14" cy="14" r="12" stroke="url(#logo-grad)" stroke-width="2.5" fill="none"/>
+                    <path d="M8 14 L14 8 L20 14 L14 20 Z" fill="url(#logo-grad)" opacity="0.8"/>
+                    <defs>
+                        <linearGradient id="logo-grad" x1="0" y1="0" x2="28" y2="28">
+                            <stop offset="0%" stop-color="#6366f1"/>
+                            <stop offset="100%" stop-color="#a855f7"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span class="logo-text">Routa</span>
+            </div>
+            <div class="status-indicator" id="tunnel-status">
+                <span class="status-dot"></span>
+                <span class="status-label">Connecting…</span>
+            </div>
+        </div>
+        <div class="status-center">
+            <div class="public-url" id="public-url" title="Click to copy">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                <span id="public-url-text">—</span>
+            </div>
+        </div>
+        <div class="status-right">
+            <div class="stat-pill">
+                <span class="stat-label">Requests</span>
+                <span class="stat-value" id="request-count">0</span>
+            </div>
+            <div class="stat-pill">
+                <span class="stat-label">Target</span>
+                <span class="stat-value" id="local-target">—</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="app">
+        <!-- Navigation Tabs -->
+        <nav id="main-nav">
+            <button class="nav-tab active" data-tab="inspector">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Inspector
+            </button>
+            <button class="nav-tab" data-tab="webhooks">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                Webhook Lab
+            </button>
+            <button class="nav-tab" data-tab="sessions">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+                Sessions
+            </button>
+        </nav>
+
+        <!-- Inspector Panel -->
+        <div id="tab-inspector" class="tab-content active">
+            <!-- Filters -->
+            <div id="filter-bar">
+                <div class="filter-group">
+                    <input type="text" id="filter-search" placeholder="Search path, method, host…" autocomplete="off">
+                    <select id="filter-method">
+                        <option value="">All Methods</option>
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="PATCH">PATCH</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="HEAD">HEAD</option>
+                        <option value="OPTIONS">OPTIONS</option>
+                    </select>
+                    <select id="filter-status">
+                        <option value="">All Status</option>
+                        <option value="2xx">2xx Success</option>
+                        <option value="3xx">3xx Redirect</option>
+                        <option value="4xx">4xx Client Error</option>
+                        <option value="5xx">5xx Server Error</option>
+                    </select>
+                </div>
+                <div class="filter-actions">
+                    <button id="btn-clear" class="btn btn-ghost" title="Clear all requests">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                        Clear
+                    </button>
+                </div>
+            </div>
+
+            <!-- Split View: Request List + Detail -->
+            <div id="inspector-split">
+                <div id="request-list-panel">
+                    <div id="request-list">
+                        <div class="empty-state" id="empty-state">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+                                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                            </svg>
+                            <p>Waiting for requests…</p>
+                            <p class="empty-sub">Send a request to your public URL to see it here</p>
+                        </div>
+                    </div>
+                </div>
+                <div id="detail-panel" class="hidden">
+                    <div id="detail-header">
+                        <div id="detail-method-status">
+                            <span id="detail-method" class="method-badge">GET</span>
+                            <span id="detail-path">/</span>
+                            <span id="detail-status" class="status-badge">200</span>
+                            <span id="detail-duration">0ms</span>
+                        </div>
+                        <div id="detail-actions">
+                            <button id="btn-replay" class="btn btn-primary btn-sm">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                Replay
+                            </button>
+                            <button id="btn-edit-replay" class="btn btn-outline btn-sm">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                Edit & Replay
+                            </button>
+                        </div>
+                    </div>
+                    <div id="detail-tabs">
+                        <button class="detail-tab active" data-detail="request">Request</button>
+                        <button class="detail-tab" data-detail="response">Response</button>
+                        <button class="detail-tab" data-detail="timing">Timing</button>
+                    </div>
+                    <div id="detail-content">
+                        <div id="detail-request" class="detail-section active">
+                            <div class="kv-section">
+                                <h4>Headers</h4>
+                                <div id="detail-req-headers" class="kv-table"></div>
+                            </div>
+                            <div class="kv-section">
+                                <h4>Body</h4>
+                                <pre id="detail-req-body" class="body-viewer"></pre>
+                            </div>
+                        </div>
+                        <div id="detail-response" class="detail-section">
+                            <div class="kv-section">
+                                <h4>Headers</h4>
+                                <div id="detail-resp-headers" class="kv-table"></div>
+                            </div>
+                            <div class="kv-section">
+                                <h4>Body</h4>
+                                <pre id="detail-resp-body" class="body-viewer"></pre>
+                            </div>
+                        </div>
+                        <div id="detail-timing" class="detail-section">
+                            <div id="timing-bars"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Webhook Lab Panel -->
+        <div id="tab-webhooks" class="tab-content">
+            <div class="webhook-header">
+                <h2>Webhook Lab</h2>
+                <button id="btn-create-webhook" class="btn btn-primary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Create Endpoint
+                </button>
+            </div>
+            <div id="webhook-list" class="empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+                <p>No webhook endpoints yet</p>
+                <p class="empty-sub">Create an endpoint to start receiving webhooks</p>
+            </div>
+        </div>
+
+        <!-- Sessions Panel -->
+        <div id="tab-sessions" class="tab-content">
+            <div class="session-header">
+                <h2>Saved Sessions</h2>
+                <button id="btn-save-session" class="btn btn-primary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+                    Save Current
+                </button>
+            </div>
+            <div id="session-list" class="empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+                    <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                </svg>
+                <p>No saved sessions</p>
+                <p class="empty-sub">Save your current captured requests as a replayable session</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Edit & Replay Modal -->
+    <div id="modal-overlay" class="hidden">
+        <div id="edit-replay-modal" class="modal">
+            <div class="modal-header">
+                <h3>Edit & Replay</h3>
+                <button id="modal-close" class="btn-icon">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label>Method</label>
+                    <select id="edit-method">
+                        <option>GET</option><option>POST</option><option>PUT</option>
+                        <option>PATCH</option><option>DELETE</option><option>HEAD</option>
+                        <option>OPTIONS</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Path</label>
+                    <input type="text" id="edit-path" placeholder="/api/endpoint">
+                </div>
+                <div class="form-row">
+                    <label>Query</label>
+                    <input type="text" id="edit-query" placeholder="key=value&foo=bar">
+                </div>
+                <div class="form-row">
+                    <label>Headers (JSON)</label>
+                    <textarea id="edit-headers" rows="5" placeholder='{"Content-Type": ["application/json"]}'></textarea>
+                </div>
+                <div class="form-row">
+                    <label>Body</label>
+                    <textarea id="edit-body" rows="8" placeholder="Request body..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-modal-cancel" class="btn btn-ghost">Cancel</button>
+                <button id="btn-modal-send" class="btn btn-primary">Send Request</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
