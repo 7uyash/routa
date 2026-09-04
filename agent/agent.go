@@ -1,5 +1,3 @@
-// Package agent implements the local Routa agent that manages the tunnel
-// connection, proxies traffic, records requests, and serves the dashboard.
 package agent
 
 import (
@@ -12,11 +10,13 @@ import (
 	"time"
 
 	"routa/config"
+	"routa/middleware"
 	"routa/protocol"
 	"routa/proxy"
 	"routa/recorder"
 	"routa/replay"
 	"routa/router"
+	"routa/shadow"
 	"routa/storage"
 	"routa/tunnel"
 	"routa/webhook"
@@ -35,6 +35,10 @@ type Agent struct {
 	webhook   *webhook.Lab
 	dashboard *DashboardServer
 
+	mutator   *middleware.Mutator
+	simulator *middleware.Simulator
+	shadower  *shadow.Shadower
+
 	mu sync.RWMutex
 }
 
@@ -42,19 +46,45 @@ type Agent struct {
 func New(cfg config.Config) *Agent {
 	rec := recorder.New(cfg.MaxRecordedEntries)
 	fwd := proxy.New()
+	
+	// Setup router
 	rtr := router.NewSingle(cfg.LocalTarget())
+	if cfg.ProjectCfg != nil && len(cfg.ProjectCfg.Routes) > 0 {
+		var routes []router.Route
+		for _, r := range cfg.ProjectCfg.Routes {
+			routes = append(routes, router.Route{
+				Pattern: r.Pattern,
+				Target:  r.Target,
+				Name:    r.Name,
+			})
+		}
+		rtr.SetRoutes(routes)
+	}
+
 	store := storage.NewStore(cfg.SessionsDir())
 	wh := webhook.NewLab()
 	rep := replay.New(fwd, rec)
 
+	var mutRules []config.MutationConfig
+	var simRules []config.SimulationConfig
+	var shadCfg config.ShadowConfig
+	if cfg.ProjectCfg != nil {
+		mutRules = cfg.ProjectCfg.Mutations
+		simRules = cfg.ProjectCfg.Simulations
+		shadCfg = cfg.ProjectCfg.Shadow
+	}
+
 	a := &Agent{
-		cfg:      cfg,
-		proxy:    fwd,
-		recorder: rec,
-		replay:   rep,
-		router:   rtr,
-		storage:  store,
-		webhook:  wh,
+		cfg:       cfg,
+		proxy:     fwd,
+		recorder:  rec,
+		replay:    rep,
+		router:    rtr,
+		storage:   store,
+		webhook:   wh,
+		mutator:   middleware.NewMutator(mutRules),
+		simulator: middleware.NewSimulator(simRules),
+		shadower:  shadow.New(shadCfg),
 	}
 
 	// Create tunnel client.
@@ -68,7 +98,9 @@ func New(cfg config.Config) *Agent {
 	}
 
 	// Create dashboard server.
+	// We pass mutator/simulator/shadower into it later if we need to modify them via API.
 	a.dashboard = NewDashboardServer(cfg.DashboardPort, rec, rep, store, wh, a.tunnel, cfg)
+	a.dashboard.agent = a // Link back to agent to update routes/mutations
 
 	return a
 }
@@ -83,7 +115,10 @@ func (a *Agent) Start(ctx context.Context) error {
 	}()
 
 	log.Printf("[agent] dashboard at http://localhost:%d", a.cfg.DashboardPort)
-	log.Printf("[agent] forwarding to %s", a.cfg.LocalTarget())
+	log.Printf("[agent] forwarding to default target %s", a.cfg.LocalTarget())
+	if a.shadower.TargetCount() > 0 {
+		log.Printf("[agent] shadowing to %d target(s)", a.shadower.TargetCount())
+	}
 
 	// Connect tunnel (blocks until stopped or fatal error).
 	return a.tunnel.Connect(ctx)
@@ -132,75 +167,126 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 
 	start := time.Now()
 
-	// Check if this is a webhook path.
+	// 1. Webhook check
 	if epID := a.webhook.MatchPath(reqMsg.Path); epID != "" {
 		a.webhook.RecordDelivery(epID, reqMsg.Method, reqMsg.Headers, reqMsg.Body)
 	}
 
-	// Route to local target.
-	target := a.router.Match(reqMsg.Path)
-	if target == "" {
-		target = a.cfg.LocalTarget()
-	}
+	// 2. Traffic Mutation (Request Phase)
+	mutReq := a.mutator.ApplyToRequest(reqMsg.Method, reqMsg.Path, reqMsg.Query, reqMsg.Headers, reqMsg.Body)
 
-	targetURL := target + reqMsg.Path
-	if reqMsg.Query != "" {
-		targetURL += "?" + reqMsg.Query
-	}
-
-	resp, err := a.proxy.Forward(reqMsg.Method, targetURL, reqMsg.Headers, reqMsg.Body)
-
-	// Build recorder entry.
+	// Build base recorder entry
 	entry := &recorder.Entry{
-		Timestamp:      time.Now(),
-		Method:         reqMsg.Method,
-		Path:           reqMsg.Path,
-		Query:          reqMsg.Query,
-		RequestHeaders: reqMsg.Headers,
-		RequestBody:    reqMsg.Body,
+		Timestamp:      start,
+		Method:         mutReq.Method,
+		Path:           mutReq.Path,
+		Query:          mutReq.Query,
+		RequestHeaders: mutReq.Headers,
+		RequestBody:    mutReq.Body,
 		Host:           reqMsg.Host,
-		FullURL:        targetURL,
 		Source:         "tunnel",
 	}
 
-	var respMsg protocol.HTTPResponseMsg
+	// If mock response is injected, skip everything else
+	if mutReq.MockResponse != nil {
+		entry.StatusCode = mutReq.MockResponse.Status
+		entry.ResponseHeaders = mutReq.MockResponse.Headers // Type needs mapping
+		entry.ResponseBody = mutReq.MockResponse.Body
+		entry.Duration = time.Since(start)
 
-	if err != nil {
-		log.Printf("[agent] forward error: %v", err)
-		entry.StatusCode = 502
-		entry.Error = err.Error()
-		entry.Duration = time.Since(start)
-		respMsg = protocol.HTTPResponseMsg{
-			StatusCode: 502,
-			Headers:    map[string][]string{"Content-Type": {"text/plain"}},
-			Body:       []byte(fmt.Sprintf("Routa: failed to reach local service: %v", err)),
+		hdr := make(map[string][]string)
+		for k, v := range mutReq.MockResponse.Headers {
+			hdr[k] = []string{v}
 		}
-	} else {
-		entry.StatusCode = resp.StatusCode
-		entry.ResponseHeaders = resp.Headers
-		entry.ResponseBody = resp.Body
-		entry.Duration = time.Since(start)
-		entry.TimingBreakdown = resp.Timing
-		respMsg = protocol.HTTPResponseMsg{
-			StatusCode: resp.StatusCode,
-			Headers:    resp.Headers,
-			Body:       resp.Body,
-		}
+		entry.ResponseHeaders = hdr
+
+		a.recorder.Record(entry)
+		a.sendHTTPResponse(frame.RequestID, entry.StatusCode, hdr, entry.ResponseBody)
+		return
 	}
 
-	// Record the entry.
+	// 3. Network Simulation
+	simRes := a.simulator.Simulate(mutReq.Method, mutReq.Path)
+	if simRes.ShouldDrop {
+		// Log drop but don't record or respond
+		log.Printf("[agent] dropping request to %s (rule: %s)", mutReq.Path, simRes.MatchedRule)
+		return
+	}
+	if simRes.InjectedStatus != 0 {
+		entry.StatusCode = simRes.InjectedStatus
+		entry.Duration = time.Since(start)
+		a.recorder.Record(entry)
+		a.sendErrorResponse(frame.RequestID, simRes.InjectedStatus, fmt.Sprintf("Injected error (rule: %s)", simRes.MatchedRule))
+		return
+	}
+	if simRes.Delay > 0 {
+		middleware.ApplyDelay(simRes)
+	}
+
+	// 4. Routing
+	target := a.router.Match(mutReq.Path)
+	if target == "" {
+		target = a.cfg.LocalTarget()
+	}
+	targetURL := target + mutReq.Path
+	if mutReq.Query != "" {
+		targetURL += "?" + mutReq.Query
+	}
+	entry.FullURL = targetURL
+
+	// 5. Shadow Traffic
+	if a.shadower.TargetCount() > 0 {
+		go a.shadower.Shadow(entry, mutReq.Method, mutReq.Path, mutReq.Query, mutReq.Headers, mutReq.Body)
+	}
+
+	// 6. Forward to primary target
+	resp, err := a.proxy.Forward(mutReq.Method, targetURL, mutReq.Headers, mutReq.Body)
+
+	var outStatus int
+	var outHeaders map[string][]string
+	var outBody []byte
+
+	if err != nil {
+		outStatus = 502
+		outHeaders = map[string][]string{"Content-Type": {"text/plain"}}
+		outBody = []byte(fmt.Sprintf("Routa: failed to reach local service: %v", err))
+		entry.Error = err.Error()
+	} else {
+		outStatus = resp.StatusCode
+		outHeaders = resp.Headers
+		outBody = resp.Body
+		entry.TimingBreakdown = resp.Timing
+	}
+
+	// 7. Traffic Mutation (Response Phase)
+	mutStatus, mutHeaders, mutBody := a.mutator.ApplyToResponse(mutReq.Method, mutReq.Path, outStatus, outHeaders, outBody)
+
+	entry.StatusCode = mutStatus
+	entry.ResponseHeaders = mutHeaders
+	entry.ResponseBody = mutBody
+	entry.Duration = time.Since(start)
+
+	// Record and log
 	a.recorder.Record(entry)
 
-	// Parse URL for logging.
-	parsedPath := reqMsg.Path
+	parsedPath := mutReq.Path
 	if u, err := url.Parse(reqMsg.URL); err == nil && u.Path != "" {
 		parsedPath = u.Path
 	}
 	log.Printf("[agent] %s %s → %d (%s)",
-		reqMsg.Method, parsedPath, entry.StatusCode, entry.Duration.Round(time.Millisecond))
+		mutReq.Method, parsedPath, entry.StatusCode, entry.Duration.Round(time.Millisecond))
 
-	// Send response back through tunnel.
-	respFrame, err := protocol.EncodePayload(protocol.TypeHTTPResponse, frame.RequestID, respMsg)
+	// Send back to tunnel
+	a.sendHTTPResponse(frame.RequestID, mutStatus, mutHeaders, mutBody)
+}
+
+func (a *Agent) sendHTTPResponse(requestID uint32, status int, headers map[string][]string, body []byte) {
+	respMsg := protocol.HTTPResponseMsg{
+		StatusCode: status,
+		Headers:    headers,
+		Body:       body,
+	}
+	respFrame, err := protocol.EncodePayload(protocol.TypeHTTPResponse, requestID, respMsg)
 	if err != nil {
 		log.Printf("[agent] encode response: %v", err)
 		return
@@ -210,15 +296,6 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 	}
 }
 
-// sendErrorResponse sends an error response frame back through the tunnel.
 func (a *Agent) sendErrorResponse(requestID uint32, status int, message string) {
-	respMsg := protocol.HTTPResponseMsg{
-		StatusCode: status,
-		Headers:    map[string][]string{"Content-Type": {"text/plain"}},
-		Body:       []byte(message),
-	}
-	respFrame, _ := protocol.EncodePayload(protocol.TypeHTTPResponse, requestID, respMsg)
-	var buf bytes.Buffer
-	respFrame.Encode(&buf)
-	a.tunnel.SendFrame(respFrame)
+	a.sendHTTPResponse(requestID, status, map[string][]string{"Content-Type": {"text/plain"}}, []byte(message))
 }
