@@ -2,12 +2,15 @@
 package recorder
 
 import (
+	"sync"
 	"time"
+
+	"routa/protocol"
 )
 
 // Entry represents a single captured HTTP request/response exchange.
 type Entry struct {
-	ID        string `json:"id"`
+	ID        string    `json:"id"`
 	Timestamp time.Time `json:"timestamp"`
 
 	// Request fields
@@ -25,26 +28,52 @@ type Entry struct {
 	ResponseBody    []byte              `json:"response_body"`
 
 	// Timing
-	Duration         time.Duration `json:"duration_ms"`
-	TimingBreakdown  TimingBreakdown `json:"timing_breakdown"`
+	Duration        time.Duration        `json:"duration_ms"`
+	TimingBreakdown *protocol.TimingInfo `json:"timing_breakdown,omitempty"`
 
 	// Metadata
-	IsReplay       bool   `json:"is_replay"`
-	OriginalID     string `json:"original_id,omitempty"`
-	Tags           []string `json:"tags,omitempty"`
-	Source         string `json:"source"` // "tunnel", "replay", "webhook"
-	WebhookID      string `json:"webhook_id,omitempty"`
-	Error          string `json:"error,omitempty"`
+	IsReplay   bool     `json:"is_replay"`
+	OriginalID string   `json:"original_id,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
+	Source     string   `json:"source"` // "tunnel", "replay", "webhook"
+	WebhookID  string   `json:"webhook_id,omitempty"`
+	Error      string   `json:"error,omitempty"`
+
+	// Shadow traffic and diffing
+	mu            sync.RWMutex
+	ShadowResults []ShadowResult `json:"shadow_results,omitempty"`
+	Diff          *DiffResult    `json:"diff,omitempty"`
 }
 
-// TimingBreakdown provides detailed latency metrics for a request.
-type TimingBreakdown struct {
-	DNSLookup    int64 `json:"dns_lookup_ms"`
-	TCPConnect   int64 `json:"tcp_connect_ms"`
-	TLSHandshake int64 `json:"tls_handshake_ms"`
-	FirstByte    int64 `json:"first_byte_ms"`
-	ContentTransfer int64 `json:"content_transfer_ms"`
-	Total        int64 `json:"total_ms"`
+// ShadowResult stores the outcome of sending a request to a shadow target.
+type ShadowResult struct {
+	Target          string              `json:"target"`
+	StatusCode      int                 `json:"status_code"`
+	ResponseHeaders map[string][]string `json:"response_headers"`
+	ResponseBody    []byte              `json:"response_body"`
+	Duration        time.Duration       `json:"duration"`
+	Error           string              `json:"error,omitempty"`
+}
+
+// DiffResult holds the comparison between this request and its original.
+type DiffResult struct {
+	StatusDiff  string            `json:"status_diff,omitempty"`  // e.g. "200 -> 500"
+	HeadersDiff map[string]string `json:"headers_diff,omitempty"` // added/removed/changed
+	BodyDiff    string            `json:"body_diff,omitempty"`    // text diff
+}
+
+// SetShadowResults safely sets the shadow results on an entry.
+func (e *Entry) SetShadowResults(results []ShadowResult) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.ShadowResults = results
+}
+
+// GetShadowResults safely retrieves the shadow results.
+func (e *Entry) GetShadowResults() []ShadowResult {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.ShadowResults
 }
 
 // EntrySummary is a compact representation for list views.
