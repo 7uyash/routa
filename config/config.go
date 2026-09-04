@@ -31,6 +31,9 @@ type Config struct {
 
 	// Data directory for sessions and storage
 	DataDir string `json:"data_dir" yaml:"data_dir"`
+
+	// Parsed routa.yaml project config (nil if no file found).
+	ProjectCfg *ProjectConfig `json:"-" yaml:"-"`
 }
 
 // DefaultConfig returns a Config with sensible defaults.
