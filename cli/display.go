@@ -27,9 +27,13 @@ func NewDisplay(stats func() tunnel.Stats, reqCount func() int, pubURL func() st
 // PrintStartBanner prints the initial startup information.
 func (d *Display) PrintStartBanner(localTarget string, dashboardPort int) {
 	fmt.Println()
-	fmt.Println("  \033[38;5;99m╔═══════════════════════════════════════════════╗\033[0m")
-	fmt.Println("  \033[38;5;99m║\033[0m           \033[1;38;5;141mRouta\033[0m — Traffic Gateway             \033[38;5;99m║\033[0m")
-	fmt.Println("  \033[38;5;99m╚═══════════════════════════════════════════════╝\033[0m")
+	fmt.Println("  \033[38;5;99m ____  ___  _   _ _____ _   \033[0m")
+	fmt.Println("  \033[38;5;99m|  _ \\ / _ \\| | | |_   _/ \\  \033[0m")
+	fmt.Println("  \033[38;5;99m| |_) | | | | | | | | / _ \\ \033[0m")
+	fmt.Println("  \033[38;5;99m|  _ <| |_| | |_| | |/ ___ \\\033[0m")
+	fmt.Println("  \033[38;5;99m|_| \\_\\\\___/ \\___/|_/_/   \\_\\\033[0m")
+	fmt.Println()
+	fmt.Println("  \033[38;5;141mDeveloper Traffic Gateway\033[0m")
 	fmt.Println()
 	fmt.Printf("  \033[38;5;245m%-14s\033[0m %s\n", "Local target:", localTarget)
 	fmt.Printf("  \033[38;5;245m%-14s\033[0m http://localhost:%d\n", "Dashboard:", dashboardPort)
@@ -41,19 +45,19 @@ func (d *Display) PrintConnected(publicURL, subdomain string) {
 	fmt.Printf("  \033[38;5;245m%-14s\033[0m \033[1;38;5;114m%s\033[0m\n", "Public URL:", publicURL)
 	fmt.Printf("  \033[38;5;245m%-14s\033[0m %s\n", "Subdomain:", subdomain)
 	fmt.Println()
-	fmt.Println("  \033[38;5;245m──────────────────────────────────────────────\033[0m")
-	fmt.Println("  \033[38;5;245mWaiting for requests…\033[0m")
+	fmt.Println("  \033[38;5;245m----------------------------------------------\033[0m")
+	fmt.Println("  \033[38;5;245mWaiting for requests...\033[0m")
 	fmt.Println()
 }
 
 // PrintDisconnected prints a disconnection notice.
 func (d *Display) PrintDisconnected() {
-	fmt.Println("\n  \033[38;5;196m⚠  Tunnel disconnected — reconnecting…\033[0m")
+	fmt.Println("\n  \033[38;5;196m[!] Tunnel disconnected - reconnecting...\033[0m")
 }
 
 // PrintReconnected prints a reconnection notice.
 func (d *Display) PrintReconnected() {
-	fmt.Println("  \033[38;5;114m✓  Tunnel reconnected\033[0m")
+	fmt.Println("  \033[38;5;114m[+] Tunnel reconnected\033[0m")
 }
 
 // PrintRequest prints a single request log line.
@@ -61,7 +65,7 @@ func (d *Display) PrintRequest(method, path string, status int, duration time.Du
 	methodColor := methodColorCode(method)
 	statusColor := statusColorCode(status)
 
-	fmt.Printf("  %s%-7s\033[0m %s → %s%d\033[0m \033[38;5;245m(%s)\033[0m\n",
+	fmt.Printf("  %s%-7s\033[0m %s -> %s%d\033[0m \033[38;5;245m(%s)\033[0m\n",
 		methodColor, method,
 		truncatePath(path, 50),
 		statusColor, status,
@@ -111,7 +115,7 @@ func truncatePath(path string, maxLen int) string {
 
 func formatDuration(d time.Duration) string {
 	if d < time.Millisecond {
-		return fmt.Sprintf("%dµs", d.Microseconds())
+		return fmt.Sprintf("%dus", d.Microseconds())
 	}
 	if d < time.Second {
 		return fmt.Sprintf("%dms", d.Milliseconds())
