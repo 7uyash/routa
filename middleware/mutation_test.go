@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"routa/config"
+	"github.com/7uyash/routa/config"
 )
 
 func mutRule(name, matchPath, matchMethod string, req config.RequestMutation, resp config.ResponseMutation) config.MutationConfig {

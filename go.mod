@@ -1,4 +1,4 @@
-module routa
+module github.com/7uyash/routa
 
 go 1.26.4
 

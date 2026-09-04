@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"routa/config"
+	"github.com/7uyash/routa/config"
 )
 
 // Simulator applies network/failure simulation rules to a request before

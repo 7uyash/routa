@@ -7,7 +7,7 @@ import (
 	"os"
 	"strconv"
 
-	"routa/config"
+	"github.com/7uyash/routa/config"
 )
 
 // Command represents a parsed CLI command.

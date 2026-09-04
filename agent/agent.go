@@ -8,17 +8,17 @@ import (
 	"sync"
 	"time"
 
-	"routa/config"
-	"routa/middleware"
-	"routa/protocol"
-	"routa/proxy"
-	"routa/recorder"
-	"routa/replay"
-	"routa/router"
-	"routa/shadow"
-	"routa/storage"
-	"routa/tunnel"
-	"routa/webhook"
+	"github.com/7uyash/routa/config"
+	"github.com/7uyash/routa/middleware"
+	"github.com/7uyash/routa/protocol"
+	"github.com/7uyash/routa/proxy"
+	"github.com/7uyash/routa/recorder"
+	"github.com/7uyash/routa/replay"
+	"github.com/7uyash/routa/router"
+	"github.com/7uyash/routa/shadow"
+	"github.com/7uyash/routa/storage"
+	"github.com/7uyash/routa/tunnel"
+	"github.com/7uyash/routa/webhook"
 )
 
 // Agent is the main local component that orchestrates tunnel, proxy,

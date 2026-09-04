@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"routa/config"
+	"github.com/7uyash/routa/config"
 )
 
 // Mutator applies traffic mutation rules to requests and responses.

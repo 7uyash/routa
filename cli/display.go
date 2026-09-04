@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"routa/tunnel"
+	"github.com/7uyash/routa/tunnel"
 )
 
 // Display manages the terminal output for the running agent.

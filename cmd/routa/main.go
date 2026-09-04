@@ -16,9 +16,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"routa/agent"
-	"routa/cli"
-	"routa/relay"
+	"github.com/7uyash/routa/agent"
+	"github.com/7uyash/routa/cli"
+	"github.com/7uyash/routa/relay"
 )
 
 func main() {

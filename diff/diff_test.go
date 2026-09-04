@@ -3,7 +3,7 @@ package diff
 import (
 	"testing"
 
-	"routa/recorder"
+	"github.com/7uyash/routa/recorder"
 )
 
 func TestCompareIdentical(t *testing.T) {

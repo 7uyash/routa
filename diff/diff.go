@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"routa/recorder"
+	"github.com/7uyash/routa/recorder"
 )
 
 // Compare compares a replayed entry against its original entry.

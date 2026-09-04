@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"routa/config"
+	"github.com/7uyash/routa/config"
 )
 
 func simRule(name, path, method string) config.SimulationConfig {
