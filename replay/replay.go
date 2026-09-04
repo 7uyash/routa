@@ -4,8 +4,8 @@ package replay
 import (
 	"time"
 
-	"routa/proxy"
-	"routa/recorder"
+	"github.com/7uyash/routa/proxy"
+	"github.com/7uyash/routa/recorder"
 )
 
 // Engine replays recorded requests against a local service.
@@ -55,7 +55,7 @@ func (e *Engine) Replay(entryID, localTarget string) (*recorder.Entry, error) {
 		IsReplay:       true,
 		OriginalID:     original.ID,
 		Source:         "replay",
-		Tags:          []string{"replay"},
+		Tags:           []string{"replay"},
 	}
 
 	if err != nil {
@@ -100,7 +100,7 @@ func (e *Engine) EditAndReplay(req EditRequest, localTarget string) (*recorder.E
 		IsReplay:       true,
 		OriginalID:     req.OriginalID,
 		Source:         "replay",
-		Tags:          []string{"replay", "edited"},
+		Tags:           []string{"replay", "edited"},
 	}
 
 	if err != nil {

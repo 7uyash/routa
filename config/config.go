@@ -25,9 +25,9 @@ type Config struct {
 	BasicAuthPass string `json:"basic_auth_pass" yaml:"basic_auth_pass"`
 
 	// Relay settings
-	RelayPort    int    `json:"relay_port" yaml:"relay_port"`
-	RelayHost    string `json:"relay_host" yaml:"relay_host"`
-	BaseDomain   string `json:"base_domain" yaml:"base_domain"`
+	RelayPort  int    `json:"relay_port" yaml:"relay_port"`
+	RelayHost  string `json:"relay_host" yaml:"relay_host"`
+	BaseDomain string `json:"base_domain" yaml:"base_domain"`
 
 	// Data directory for sessions and storage
 	DataDir string `json:"data_dir" yaml:"data_dir"`

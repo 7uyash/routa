@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"routa/protocol"
+	"github.com/7uyash/routa/protocol"
 )
 
 // Entry represents a single captured HTTP request/response exchange.

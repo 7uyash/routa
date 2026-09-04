@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"routa/protocol"
+	"github.com/7uyash/routa/protocol"
 
 	"github.com/gorilla/websocket"
 )
@@ -47,11 +47,11 @@ type Client struct {
 	authToken  string
 	tunnelName string
 
-	conn     *websocket.Conn
-	connMu   sync.Mutex
-	state    atomic.Int32
-	stopCh   chan struct{}
-	doneCh   chan struct{}
+	conn   *websocket.Conn
+	connMu sync.Mutex
+	state  atomic.Int32
+	stopCh chan struct{}
+	doneCh chan struct{}
 
 	// Stats
 	requestCount   atomic.Int64

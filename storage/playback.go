@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"routa/proxy"
-	"routa/recorder"
+	"github.com/7uyash/routa/proxy"
+	"github.com/7uyash/routa/recorder"
 )
 
 // PlaybackEngine plays a saved session deterministically.
@@ -43,7 +43,7 @@ func (p *PlaybackEngine) Play(ctx context.Context, opts PlaybackOptions) error {
 		return fmt.Errorf("session is empty")
 	}
 
-	// Session entries are recorded in newest-first or oldest-first? 
+	// Session entries are recorded in newest-first or oldest-first?
 	// The recorder.All() currently returns them in an order. Let's make sure we iterate
 	// in chronological order (oldest first).
 	// In recorder, usually newest is at front if we use List, but All() depends on implementation.

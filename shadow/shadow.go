@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"routa/config"
-	"routa/recorder"
+	"github.com/7uyash/routa/config"
+	"github.com/7uyash/routa/recorder"
 )
 
 // Shadower duplicates traffic to secondary targets concurrently without blocking

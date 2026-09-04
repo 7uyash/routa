@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"routa/recorder"
+	"github.com/7uyash/routa/recorder"
 )
 
 // SessionInfo describes a saved session.

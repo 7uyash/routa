@@ -45,7 +45,7 @@ type Agent struct {
 func New(cfg config.Config) *Agent {
 	rec := recorder.New(cfg.MaxRecordedEntries)
 	fwd := proxy.New()
-	
+
 	// Setup router
 	rtr := router.NewSingle(cfg.LocalTarget())
 	if cfg.ProjectCfg != nil && len(cfg.ProjectCfg.Routes) > 0 {

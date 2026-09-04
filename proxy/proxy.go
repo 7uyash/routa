@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"routa/protocol"
+	"github.com/7uyash/routa/protocol"
 )
 
 // Forwarder sends HTTP requests to a local target and captures timing.

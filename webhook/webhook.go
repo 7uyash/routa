@@ -12,21 +12,21 @@ import (
 
 // KnownSignatureHeaders maps provider names to their webhook signature headers.
 var KnownSignatureHeaders = map[string]string{
-	"GitHub":    "X-Hub-Signature-256",
-	"Stripe":    "Stripe-Signature",
-	"Shopify":   "X-Shopify-Hmac-Sha256",
-	"Discord":   "X-Signature-Ed25519",
-	"Twilio":    "X-Twilio-Signature",
-	"Slack":     "X-Slack-Signature",
-	"SendGrid":  "X-Twilio-Email-Event-Webhook-Signature",
-	"PayPal":    "Paypal-Transmission-Sig",
+	"GitHub":   "X-Hub-Signature-256",
+	"Stripe":   "Stripe-Signature",
+	"Shopify":  "X-Shopify-Hmac-Sha256",
+	"Discord":  "X-Signature-Ed25519",
+	"Twilio":   "X-Twilio-Signature",
+	"Slack":    "X-Slack-Signature",
+	"SendGrid": "X-Twilio-Email-Event-Webhook-Signature",
+	"PayPal":   "Paypal-Transmission-Sig",
 }
 
 // Endpoint represents a webhook endpoint created in the webhook lab.
 type Endpoint struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
-	Path      string    `json:"path"`       // e.g., "/webhook/abc123"
+	Path      string    `json:"path"` // e.g., "/webhook/abc123"
 	CreatedAt time.Time `json:"created_at"`
 	Active    bool      `json:"active"`
 }

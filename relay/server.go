@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"routa/protocol"
-	"routa/tunnel"
+	"github.com/7uyash/routa/protocol"
+	"github.com/7uyash/routa/tunnel"
 
 	"github.com/gorilla/websocket"
 )

@@ -10,7 +10,7 @@ import (
 
 // Display manages the terminal output for the running agent.
 type Display struct {
-	tunnelStats func() tunnel.Stats
+	tunnelStats  func() tunnel.Stats
 	requestCount func() int
 	publicURL    func() string
 }

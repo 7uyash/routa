@@ -319,8 +319,8 @@ func (ds *DashboardServer) handleSessionDetail(w http.ResponseWriter, r *http.Re
 			ds.rec.Record(entry)
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"name":    session.Name,
-			"loaded":  len(session.Entries),
+			"name":   session.Name,
+			"loaded": len(session.Entries),
 		})
 
 	case r.Method == "DELETE":
@@ -670,4 +670,3 @@ func (ds *DashboardServer) handleSessionPlayback(w http.ResponseWriter, r *http.
 
 // Ensure unused imports don't cause build errors.
 var _ = recorder.Entry{}
-

@@ -49,9 +49,9 @@ type RouteConfig struct {
 
 // MutationConfig describes a traffic mutation rule.
 type MutationConfig struct {
-	Name    string            `yaml:"name"`
-	Match   MatchConfig       `yaml:"match"`
-	Request RequestMutation   `yaml:"request"`
+	Name     string           `yaml:"name"`
+	Match    MatchConfig      `yaml:"match"`
+	Request  RequestMutation  `yaml:"request"`
 	Response ResponseMutation `yaml:"response"`
 }
 
@@ -85,8 +85,8 @@ type ResponseMutation struct {
 	// Override the status code.
 	ForceStatus int `yaml:"force_status"`
 	// Return a mock response instead of forwarding at all.
-	MockStatus  int    `yaml:"mock_status"`
-	MockBody    string `yaml:"mock_body"`
+	MockStatus  int               `yaml:"mock_status"`
+	MockBody    string            `yaml:"mock_body"`
 	MockHeaders map[string]string `yaml:"mock_headers"`
 }
 
@@ -121,11 +121,11 @@ type ShadowConfig struct {
 
 // RecordingConfig controls what gets captured and redacted.
 type RecordingConfig struct {
-	Enabled            bool     `yaml:"enabled"`
-	MaxEntries         int      `yaml:"max_entries"`
-	RedactHeaders      []string `yaml:"redact_headers"`       // e.g. ["Authorization", "Cookie"]
-	RedactBodyFields   []string `yaml:"redact_body_fields"`   // dot-path fields to blank out
-	ExcludePaths       []string `yaml:"exclude_paths"`        // paths never recorded
+	Enabled          bool     `yaml:"enabled"`
+	MaxEntries       int      `yaml:"max_entries"`
+	RedactHeaders    []string `yaml:"redact_headers"`     // e.g. ["Authorization", "Cookie"]
+	RedactBodyFields []string `yaml:"redact_body_fields"` // dot-path fields to blank out
+	ExcludePaths     []string `yaml:"exclude_paths"`      // paths never recorded
 }
 
 // LoadProjectConfig reads routa.yaml from the given directory.
