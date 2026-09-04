@@ -1,57 +1,65 @@
-# ⚡ Routa
+<p align="center">
+  <img src="agent/dashboard/static/logo.png" alt="Routa" height="80">
+</p>
 
-> **High-Performance Developer Traffic Gateway, Local Tunneling, & Inspection Platform in Go.**
+<p align="center">
+  <strong>High-Performance Developer Traffic Gateway, Local Tunneling & Inspection Platform in Go.</strong>
+</p>
 
-[![Go Version](https://img.shields.io/badge/Go-1.21%2B-00ADD8?style=flat&logo=go)](https://golang.org)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
-
-**Routa** is a lightweight, all-in-one developer traffic proxy, HTTP inspector, public tunnel gateway, and chaos engineering toolkit. It gives backend developers, API engineers, and frontend teams instant visibility and total control over inbound and outbound HTTP traffic—without needing complex cloud proxy setups.
-
----
-
-## ✨ Features
-
-- 🚀 **Local HTTP Tunneling & Relay** — Expose local HTTP services to the internet via a self-hosted Relay server with automatic WebSocket connection management, multiplexing, heartbeat monitoring, and automatic reconnection.
-- 🔍 **Live Traffic Inspector** — Embedded web dashboard (`http://localhost:4040`) featuring real-time WebSocket push updates, full request/response headers & body inspection, timing breakdowns, and search/filtering.
-- 🔁 **Replay & Edit-Replay** — Re-fire any recorded HTTP request with a single click or modify headers, query params, and JSON request bodies inline before re-sending.
-- 🔀 **Multi-Service Routing** — Declarative pattern matching (`/api/v1/*`, `/auth/*`, `/*`) to route traffic to multiple local backend microservices seamlessly.
-- 🎣 **Webhook Testing Lab** — Inspect incoming webhooks instantly with provider auto-detection (GitHub, Stripe, Shopify, Discord, Slack, Twilio, SendGrid, PayPal) and signature header verification.
-- 🛠️ **Traffic Mutation & Mock Engine** — Inject/strip headers, rewrite URL paths, modify JSON request bodies via dot-path expressions, mock JSON responses, or force HTTP status codes on the fly.
-- ⚡ **Network & Failure Simulator** — Test application resilience by injecting fixed/jittered latency, simulating connection drops, forcing configurable error rates (e.g. 50% 500 errors), or imposing artificial backend timeouts.
-- 👥 **Shadow Traffic & Deep Response Differ** — Forward production/staging traffic asynchronously to a shadow target URL and compare responses side-by-side with deep JSON body diffing.
-- 💾 **Session Persistence & Playback** — Export request collections into session fixtures and run deterministic sequential playbacks with preserved inter-request timing.
+<p align="center">
+  <a href="https://golang.org"><img src="https://img.shields.io/badge/Go-1.21%2B-00ADD8?style=flat&logo=go" alt="Go Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
+  <img src="https://img.shields.io/badge/Build-Passing-brightgreen.svg" alt="Build Status">
+</p>
 
 ---
 
-## 🏗️ Architecture Overview
+**Routa** is a lightweight, all-in-one developer traffic proxy, HTTP inspector, public tunnel gateway, and chaos engineering toolkit. It gives backend developers, API engineers, and frontend teams instant visibility and total control over inbound and outbound HTTP traffic — without needing complex cloud proxy setups.
+
+---
+
+## Features
+
+- **Local HTTP Tunneling & Relay** — Expose local HTTP services to the internet via a self-hosted Relay server with automatic WebSocket connection management, multiplexing, heartbeat monitoring, and automatic reconnection.
+- **Live Traffic Inspector** — Embedded web dashboard (`http://localhost:4040`) featuring real-time WebSocket push updates, full request/response headers & body inspection, timing breakdowns, and search/filtering.
+- **Replay & Edit-Replay** — Re-fire any recorded HTTP request with a single click or modify headers, query params, and JSON request bodies inline before re-sending.
+- **Multi-Service Routing** — Declarative pattern matching (`/api/v1/*`, `/auth/*`, `/*`) to route traffic to multiple local backend microservices seamlessly.
+- **Webhook Testing Lab** — Inspect incoming webhooks instantly with provider auto-detection (GitHub, Stripe, Shopify, Discord, Slack, Twilio, SendGrid, PayPal) and signature header verification.
+- **Traffic Mutation & Mock Engine** — Inject/strip headers, rewrite URL paths, modify JSON request bodies via dot-path expressions, mock JSON responses, or force HTTP status codes on the fly.
+- **Network & Failure Simulator** — Test application resilience by injecting fixed/jittered latency, simulating connection drops, forcing configurable error rates (e.g. 50% 500 errors), or imposing artificial backend timeouts.
+- **Shadow Traffic & Deep Response Differ** — Forward production/staging traffic asynchronously to a shadow target URL and compare responses side-by-side with deep JSON body diffing.
+- **Session Persistence & Playback** — Export request collections into session fixtures and run deterministic sequential playbacks with preserved inter-request timing.
+
+---
+
+## Architecture Overview
 
 ```
                         PUBLIC INTERNET
-                               │
-                       ┌───────▼───────┐
-                       │  Routa Relay  │ (Public Edge Server)
-                       └───────┬───────┘
-                               │ WebSocket Tunnel (Multiplexed Frames)
-                               │
-                       ┌───────▼───────┐
-                       │  Routa Agent  │ (Local Machine)
-                       └───────┬───────┘
-             ┌─────────────────┼─────────────────┐
-             │                 │                 │
-     ┌───────▼───────┐ ┌───────▼───────┐ ┌───────▼───────┐
-     │ Dashboard UI  │ │ Mutation /    │ │ Webhook Lab   │
-     │  (:4040 SPA)  │ │ Simulator Pipeline             │
-     └───────────────┘ └───────┬───────┘ └───────────────┘
-                               │
-                       ┌───────▼───────┐
-                       │ Local Service │ (http://127.0.0.1:3000)
-                       └───────────────┘
+                               |
+                    +---------------------+
+                    |   Routa Relay       |  (Public Edge Server)
+                    +---------------------+
+                               | WebSocket Tunnel (Multiplexed Frames)
+                               |
+                    +---------------------+
+                    |   Routa Agent       |  (Local Machine)
+                    +---------------------+
+             +-------------+-------------+
+             |             |             |
+    +-----------------+ +-----------------+ +-----------------+
+    | Dashboard UI    | | Mutation /      | | Webhook Lab     |
+    | (:4040 SPA)     | | Simulator Pipeline              |
+    +-----------------+ +-----------------+ +-----------------+
+                               |
+                    +---------------------+
+                    |  Local Service      |  (http://127.0.0.1:3000)
+                    +---------------------+
 ```
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -69,7 +77,7 @@ go build -o routa ./cmd/routa
 
 ---
 
-## 💡 Usage
+## Usage
 
 ### 1. Dev Mode (Tunnel Local Service)
 
@@ -85,7 +93,7 @@ routa dev 3000 --relay ws://relay.example.com:8080 --name my-app
 
 **Output:**
 ```text
-  Routa — Traffic Gateway
+  Routa - Traffic Gateway
 
   Local target:  http://127.0.0.1:3000
   Dashboard:     http://localhost:4040
@@ -159,17 +167,17 @@ routa dev --config routa.yaml
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 Detailed documentation is available in the [`docs/`](./docs) directory:
 
-- 📖 [**User Guide**](./docs/USAGE.md) — Comprehensive guide on CLI commands, dashboard features, webhook lab, mutation rules, simulations, and playback.
-- ⚙️ [**Configuration Reference**](./docs/CONFIGURATION.md) — Complete `routa.yaml` schema documentation.
-- 🤝 [**Contributing Guide**](./docs/CONTRIBUTING.md) — Architecture breakdown, package layout, dev setup, and pull request guidelines.
+- [**User Guide**](./docs/USAGE.md) — Comprehensive guide on CLI commands, dashboard features, webhook lab, mutation rules, simulations, and playback.
+- [**Configuration Reference**](./docs/CONFIGURATION.md) — Complete `routa.yaml` schema documentation.
+- [**Contributing Guide**](./docs/CONTRIBUTING.md) — Architecture breakdown, package layout, dev setup, and pull request guidelines.
 
 ---
 
-## 🛠️ Project Structure
+## Project Structure
 
 | Directory | Description |
 |-----------|-------------|
@@ -192,7 +200,7 @@ Detailed documentation is available in the [`docs/`](./docs) directory:
 
 ---
 
-## 🧪 Testing
+## Testing
 
 Run all unit tests across packages:
 
@@ -208,6 +216,6 @@ go vet ./...
 
 ---
 
-## 📄 License
+## License
 
 Routa is open-source software licensed under the [MIT License](LICENSE).
