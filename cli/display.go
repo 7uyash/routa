@@ -53,7 +53,7 @@ func (d *Display) PrintDisconnected() {
 
 // PrintReconnected prints a reconnection notice.
 func (d *Display) PrintReconnected() {
-	fmt.Println("  \033[38;5;114m✓  Tunnel reconnected\033[0m\n")
+	fmt.Println("  \033[38;5;114m✓  Tunnel reconnected\033[0m")
 }
 
 // PrintRequest prints a single request log line.
