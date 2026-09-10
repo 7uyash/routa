@@ -47,9 +47,21 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 Inspector
             </button>
+            <button class="nav-tab" data-tab="discovery">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Discovery
+            </button>
+            <button class="nav-tab" data-tab="apimap">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                API Map
+            </button>
+            <button class="nav-tab" data-tab="mocklab">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2v7.31L4.75 20.29A1 1 0 005.62 22h12.76a1 1 0 00.87-1.71L14 9.31V2"/></svg>
+                Mock Lab
+            </button>
             <button class="nav-tab" data-tab="webhooks">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                Webhook Lab
+                Connect Webhooks
             </button>
             <button class="nav-tab" data-tab="sessions">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
@@ -123,6 +135,10 @@
                             <span id="detail-duration">0ms</span>
                         </div>
                         <div id="detail-actions">
+                            <button id="btn-create-mock-from-req" class="btn btn-secondary btn-sm" title="Convert captured traffic into a mock endpoint">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2v7.31L4.75 20.29A1 1 0 005.62 22h12.76a1 1 0 00.87-1.71L14 9.31V2"/></svg>
+                                Create Mock
+                            </button>
                             <button id="btn-replay" class="btn btn-primary btn-sm">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                                 Replay
@@ -176,21 +192,68 @@
             </div>
         </div>
 
-        <!-- Webhook Lab Panel -->
-        <div id="tab-webhooks" class="tab-content">
-            <div class="webhook-header">
-                <h2>Webhook Lab</h2>
-                <button id="btn-create-webhook" class="btn btn-primary">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Create Endpoint
+        <!-- Discovery Panel -->
+        <div id="tab-discovery" class="tab-content">
+            <div class="panel-header">
+                <div>
+                    <h2>Zero-Config Service Discovery</h2>
+                    <p class="panel-desc">Scans local ports, infers HTTP services, and proposes non-breaking routing rules with user confirmation</p>
+                </div>
+                <button id="btn-scan-discovery" class="btn btn-primary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    Scan Ports Now
                 </button>
             </div>
-            <div id="webhook-list" class="empty-state">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                </svg>
-                <p>No webhook endpoints yet</p>
-                <p class="empty-sub">Create an endpoint to start receiving webhooks</p>
+            <div class="discovery-grid">
+                <div class="discovery-card-section">
+                    <h3>Discovered Local Services</h3>
+                    <div id="discovery-services-list" class="empty-state">
+                        <p>No active local services scanned yet.</p>
+                        <p class="empty-sub">Click "Scan Ports Now" to search standard dev ports (3000, 8080, 5000, etc.)</p>
+                    </div>
+                </div>
+                <div class="discovery-card-section">
+                    <h3>Proposed Routing Rules (Confirmation Required)</h3>
+                    <div id="discovery-proposals-list" class="empty-state">
+                        <p>No pending route proposals.</p>
+                        <p class="empty-sub">Routa proposes routing rules automatically without breaking your existing setups.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Map Panel -->
+        <div id="tab-apimap" class="tab-content">
+            <div class="panel-header">
+                <div>
+                    <h2>Automatic API Discovery &amp; Traffic Map</h2>
+                    <p class="panel-desc">Observed API endpoints, dynamic path normalization, and traffic statistics</p>
+                </div>
+                <button id="btn-refresh-apimap" class="btn btn-ghost">
+                    Refresh Map
+                </button>
+            </div>
+            <div id="apimap-list" class="empty-state">
+                <p>No endpoints discovered yet.</p>
+                <p class="empty-sub">Send requests through Routa to build a real-time normalized API map.</p>
+            </div>
+        </div>
+
+        <!-- Mock Lab Panel -->
+        <div id="tab-mocklab" class="tab-content">
+            <div class="panel-header">
+                <div>
+                    <h2>Mock Lab</h2>
+                    <p class="panel-desc">Serve local mock API endpoints, simulate latency or 5xx errors, and convert live traffic into mocks</p>
+                </div>
+                <button id="btn-add-mock" class="btn btn-primary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Create Mock Endpoint
+                </button>
+            </div>
+            <div id="mocklab-list" class="empty-state">
+                <p>No mock endpoints configured</p>
+                <p class="empty-sub">Create a custom mock or click "Create Mock" on captured traffic in Inspector</p>
             </div>
         </div>
 
