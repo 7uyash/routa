@@ -3,11 +3,12 @@
 package mock
 
 import (
-	"crypto/rand"
+	crand "crypto/rand"
 	"encoding/hex"
-	"math/rand/v2"
+	mrand "math/rand/v2"
 	"sync"
 	"time"
+)
 
 	"github.com/7uyash/routa/discovery"
 	"github.com/7uyash/routa/recorder"
@@ -175,7 +176,7 @@ func (r *MockRule) ServeMock() (int, map[string]string, []byte) {
 		time.Sleep(time.Duration(r.DelayMs) * time.Millisecond)
 	}
 
-	if r.ErrorRate > 0 && rand.Float64() < r.ErrorRate {
+	if r.ErrorRate > 0 && mrand.Float64() < r.ErrorRate {
 		return 500, map[string]string{"Content-Type": "application/json"}, []byte(`{"error": "Simulated 500 error from Mock Lab"}`)
 	}
 
@@ -195,6 +196,6 @@ func matchPathPattern(pattern, path string) bool {
 
 func generateMockID() string {
 	b := make([]byte, 6)
-	rand.Read(b)
+	crand.Read(b)
 	return "mock_" + hex.EncodeToString(b)
 }

@@ -80,14 +80,14 @@ func (b *MapBuilder) BuildMap(entries []*recorder.Entry) []*EndpointMetrics {
 				NormalizedPath: normPath,
 				SamplePath:     entry.Path,
 				Count:          0,
-				SampleHeaders:  entry.Headers,
+				SampleHeaders:  entry.ResponseHeaders,
 				SampleBody:     string(entry.ResponseBody),
 			}
 			endpointMap[key] = ep
 		}
 
 		ep.Count++
-		ep.TotalDuration += entry.DurationMs
+		ep.TotalDuration += entry.Duration.Milliseconds()
 		ep.AvgDurationMs = ep.TotalDuration / int64(ep.Count)
 
 		if entry.StatusCode >= 200 && entry.StatusCode < 400 {
