@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"net/url"
 	"sync"
 	"time"
@@ -340,3 +342,156 @@ func (a *Agent) sendHTTPResponse(requestID uint32, status int, headers map[strin
 func (a *Agent) sendErrorResponse(requestID uint32, status int, message string) {
 	a.sendHTTPResponse(requestID, status, map[string][]string{"Content-Type": {"text/plain"}}, []byte(message))
 }
+
+// ServeHTTP handles incoming local HTTP requests, passing them through
+// the mock lab, mutator, simulator, router, and recorder pipeline.
+func (a *Agent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	body, _ := io.ReadAll(r.Body)
+
+	path := r.URL.Path
+	query := r.URL.RawQuery
+	headers := make(map[string][]string)
+	for k, v := range r.Header {
+		headers[k] = v
+	}
+
+	// 1. Webhook check
+	if epID := a.webhook.MatchPath(path); epID != "" {
+		a.webhook.RecordDelivery(epID, r.Method, headers, body)
+	}
+
+	// 2. Mock Lab match check
+	if mockRule := a.mockLab.MatchRequest(r.Method, path); mockRule != nil {
+		status, mHeaders, mBody := mockRule.ServeMock()
+		entry := &recorder.Entry{
+			Timestamp:       start,
+			Method:          r.Method,
+			Path:            path,
+			Query:           query,
+			RequestHeaders:  headers,
+			RequestBody:     body,
+			StatusCode:      status,
+			ResponseHeaders: make(map[string][]string),
+			ResponseBody:    mBody,
+			Duration:        time.Since(start),
+			Host:            r.Host,
+			Source:          "mock_lab",
+		}
+		for k, v := range mHeaders {
+			entry.ResponseHeaders[k] = []string{v}
+			w.Header().Set(k, v)
+		}
+		a.recorder.Record(entry)
+		w.WriteHeader(status)
+		w.Write(mBody)
+		log.Printf("[agent] [Mock Lab] %s %s → %d (%s)", r.Method, path, status, entry.Duration.Round(time.Millisecond))
+		return
+	}
+
+	// 3. Traffic Mutation (Request Phase)
+	mutReq := a.mutator.ApplyToRequest(r.Method, path, query, headers, body)
+
+	entry := &recorder.Entry{
+		Timestamp:      start,
+		Method:         mutReq.Method,
+		Path:           mutReq.Path,
+		Query:          mutReq.Query,
+		RequestHeaders: mutReq.Headers,
+		RequestBody:    mutReq.Body,
+		Host:           r.Host,
+		Source:         "local_proxy",
+	}
+
+	// If mock response is injected via mutation rule, return immediately
+	if mutReq.MockResponse != nil {
+		entry.StatusCode = mutReq.MockResponse.Status
+		hdr := make(map[string][]string)
+		for k, v := range mutReq.MockResponse.Headers {
+			hdr[k] = []string{v}
+			w.Header().Set(k, v)
+		}
+		entry.ResponseHeaders = hdr
+		entry.ResponseBody = mutReq.MockResponse.Body
+		entry.Duration = time.Since(start)
+
+		a.recorder.Record(entry)
+		w.WriteHeader(entry.StatusCode)
+		w.Write(entry.ResponseBody)
+		return
+	}
+
+	// 4. Network Simulation
+	simRes := a.simulator.Simulate(mutReq.Method, mutReq.Path)
+	if simRes.ShouldDrop {
+		log.Printf("[agent] dropping request to %s (rule: %s)", mutReq.Path, simRes.MatchedRule)
+		return
+	}
+	if simRes.InjectedStatus != 0 {
+		entry.StatusCode = simRes.InjectedStatus
+		entry.Duration = time.Since(start)
+		a.recorder.Record(entry)
+		w.WriteHeader(simRes.InjectedStatus)
+		w.Write([]byte(fmt.Sprintf("Injected error (rule: %s)", simRes.MatchedRule)))
+		return
+	}
+	if simRes.Delay > 0 {
+		middleware.ApplyDelay(simRes)
+	}
+
+	// 5. Routing
+	target := a.router.Match(mutReq.Path)
+	if target == "" {
+		target = a.cfg.LocalTarget()
+	}
+	targetURL := target + mutReq.Path
+	if mutReq.Query != "" {
+		targetURL += "?" + mutReq.Query
+	}
+	entry.FullURL = targetURL
+
+	// 6. Shadow Traffic
+	if a.shadower.TargetCount() > 0 {
+		go a.shadower.Shadow(entry, mutReq.Method, mutReq.Path, mutReq.Query, mutReq.Headers, mutReq.Body)
+	}
+
+	// 7. Forward to primary target
+	resp, err := a.proxy.Forward(mutReq.Method, targetURL, mutReq.Headers, mutReq.Body)
+
+	var outStatus int
+	var outHeaders map[string][]string
+	var outBody []byte
+
+	if err != nil {
+		outStatus = 502
+		outHeaders = map[string][]string{"Content-Type": {"text/plain"}}
+		outBody = []byte(fmt.Sprintf("Routa: failed to reach local service: %v", err))
+		entry.Error = err.Error()
+	} else {
+		outStatus = resp.StatusCode
+		outHeaders = resp.Headers
+		outBody = resp.Body
+		entry.TimingBreakdown = resp.Timing
+	}
+
+	// 8. Traffic Mutation (Response Phase)
+	mutStatus, mutHeaders, mutBody := a.mutator.ApplyToResponse(mutReq.Method, mutReq.Path, outStatus, outHeaders, outBody)
+
+	entry.StatusCode = mutStatus
+	entry.ResponseHeaders = mutHeaders
+	entry.ResponseBody = mutBody
+	entry.Duration = time.Since(start)
+
+	a.recorder.Record(entry)
+
+	for k, vals := range mutHeaders {
+		for _, v := range vals {
+			w.Header().Add(k, v)
+		}
+	}
+	w.WriteHeader(mutStatus)
+	w.Write(mutBody)
+
+	log.Printf("[agent] %s %s → %d (%s)", mutReq.Method, mutReq.Path, entry.StatusCode, entry.Duration.Round(time.Millisecond))
+}
+

@@ -110,12 +110,27 @@ func (ds *DashboardServer) Start() error {
 	mux.HandleFunc("/api/mocks", ds.handleMocks)
 	mux.HandleFunc("/api/mocks/", ds.handleMockDetail)
 
-	// Serve embedded static files.
 	staticFS, err := fs.Sub(staticFiles, "dashboard/static")
 	if err != nil {
 		return fmt.Errorf("embed static files: %w", err)
 	}
-	mux.Handle("/", http.FileServer(http.FS(staticFS)))
+
+	fileServer := http.FileServer(http.FS(staticFS))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if p == "/" || p == "/index.html" || p == "/style.css" || p == "/app.js" || p == "/logo.png" || p == "/favicon.ico" {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		// Forward arbitrary API traffic through the Agent local proxy & inspection engine
+		if ds.agent != nil {
+			ds.agent.ServeHTTP(w, r)
+			return
+		}
+
+		fileServer.ServeHTTP(w, r)
+	})
 
 	ds.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", ds.port),
