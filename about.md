@@ -29,28 +29,99 @@ Routa is compiled for native performance across all major operating systems and 
 - **Linux (ARM64 & AMD64)**: Native binaries for Ubuntu, Debian, Fedora, Arch, Raspberry Pi, and ARM servers (`bin/routa-linux-arm64` & `bin/routa-linux-amd64`).
 - **Windows (ARM64 & AMD64)**: Native `.exe` executables for ARM64 Windows laptops and standard x64 Windows PCs (`bin/routa-windows-arm64.exe` & `bin/routa-windows-amd64.exe`).
 
-### Quick Installation Guide
+### 📦 Complete OS-by-OS Installation & Execution Guide
 
-#### macOS (Apple Silicon / M1-M4):
+#### 🍏 1. macOS (Apple Silicon M1/M2/M3/M4 & Intel)
+
+##### Step 1: Prepare the Binary
 ```bash
+# For Apple Silicon (M1/M2/M3/M4):
 chmod +x bin/routa-darwin-arm64
+
+# For Intel Macs:
+chmod +x bin/routa-darwin-amd64
+```
+
+##### Step 2: Install to System PATH
+```bash
+# Apple Silicon:
 sudo mv bin/routa-darwin-arm64 /usr/local/bin/routa
-routa dev 3000
+
+# Intel Mac:
+sudo mv bin/routa-darwin-amd64 /usr/local/bin/routa
 ```
 
-#### Linux (ARM64 / x86_64):
+##### Step 3: Execute & Run
 ```bash
+# Start local gateway forwarding to port 3000
+routa dev 3000
+
+# Open Web Inspector Dashboard in browser:
+# http://localhost:4040
+```
+
+---
+
+#### 🐧 2. Linux (Ubuntu, Debian, Fedora, Arch, Raspberry Pi)
+
+##### Step 1: Prepare the Binary
+```bash
+# For Linux ARM64:
 chmod +x bin/routa-linux-arm64
+
+# For Linux AMD64 (x86_64):
+chmod +x bin/routa-linux-amd64
+```
+
+##### Step 2: Install to System PATH
+```bash
+# Linux ARM64:
 sudo mv bin/routa-linux-arm64 /usr/local/bin/routa
+
+# Linux AMD64:
+sudo mv bin/routa-linux-amd64 /usr/local/bin/routa
+```
+
+##### Step 3: Execute & Run
+```bash
+# Run Routa on port 3000
 routa dev 3000
 ```
 
-#### Building for All Platforms from Source:
+---
+
+#### 🪟 3. Windows (Command Prompt / PowerShell)
+
+##### Option A: Using Pre-Built Executable
+```powershell
+# For 64-bit Windows PC (AMD64):
+.\bin\routa-windows-amd64.exe dev 3000
+
+# For ARM64 Windows PC:
+.\bin\routa-windows-arm64.exe dev 3000
+```
+
+##### Option B: Install Globally in PowerShell
+```powershell
+Copy-Item .\bin\routa-windows-amd64.exe C:\Windows\System32\routa.exe
+routa dev 3000
+```
+
+---
+
+#### 🛠️ 4. Build from Source (Any OS)
+
+If you have Go installed (`go 1.21+`):
+
 ```bash
-# On Linux / macOS using Makefile:
+# Build binary for your local OS
+go build -o routa ./cmd/routa
+
+# Cross-compile for ALL operating systems & architectures at once:
+# On Linux/macOS:
 make build-all
 
-# On Windows using PowerShell:
+# On Windows (PowerShell):
 .\build.ps1
 ```
 
