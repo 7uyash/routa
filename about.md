@@ -29,11 +29,17 @@ Routa is compiled for native performance across all major operating systems and 
 - **Linux (ARM64 & AMD64)**: Native binaries for Ubuntu, Debian, Fedora, Arch, Raspberry Pi, and ARM servers (`bin/routa-linux-arm64` & `bin/routa-linux-amd64`).
 - **Windows (ARM64 & AMD64)**: Native `.exe` executables for ARM64 Windows laptops and standard x64 Windows PCs (`bin/routa-windows-arm64.exe` & `bin/routa-windows-amd64.exe`).
 
-### 📦 Complete OS-by-OS Installation & Execution Guide
+### 📦 Complete End-to-End Installation & Execution Guide (From Scratch)
 
 #### 🍏 1. macOS (Apple Silicon M1/M2/M3/M4 & Intel)
 
-##### Step 1: Prepare the Binary
+##### Step 1: Clone the Repository & Enter Directory
+```bash
+git clone https://github.com/7uyash/routa.git
+cd routa
+```
+
+##### Step 2: Make Binary Executable
 ```bash
 # For Apple Silicon (M1/M2/M3/M4):
 chmod +x bin/routa-darwin-arm64
@@ -42,7 +48,7 @@ chmod +x bin/routa-darwin-arm64
 chmod +x bin/routa-darwin-amd64
 ```
 
-##### Step 2: Install to System PATH
+##### Step 3: Install to System PATH
 ```bash
 # Apple Silicon:
 sudo mv bin/routa-darwin-arm64 /usr/local/bin/routa
@@ -51,9 +57,9 @@ sudo mv bin/routa-darwin-arm64 /usr/local/bin/routa
 sudo mv bin/routa-darwin-amd64 /usr/local/bin/routa
 ```
 
-##### Step 3: Execute & Run
+##### Step 4: Run Routa
 ```bash
-# Start local gateway forwarding to port 3000
+# Start local gateway forwarding to local port 3000
 routa dev 3000
 
 # Open Web Inspector Dashboard in browser:
@@ -64,7 +70,13 @@ routa dev 3000
 
 #### 🐧 2. Linux (Ubuntu, Debian, Fedora, Arch, Raspberry Pi)
 
-##### Step 1: Prepare the Binary
+##### Step 1: Clone the Repository & Enter Directory
+```bash
+git clone https://github.com/7uyash/routa.git
+cd routa
+```
+
+##### Step 2: Make Binary Executable
 ```bash
 # For Linux ARM64:
 chmod +x bin/routa-linux-arm64
@@ -73,7 +85,7 @@ chmod +x bin/routa-linux-arm64
 chmod +x bin/routa-linux-amd64
 ```
 
-##### Step 2: Install to System PATH
+##### Step 3: Install to System PATH
 ```bash
 # Linux ARM64:
 sudo mv bin/routa-linux-arm64 /usr/local/bin/routa
@@ -82,9 +94,9 @@ sudo mv bin/routa-linux-arm64 /usr/local/bin/routa
 sudo mv bin/routa-linux-amd64 /usr/local/bin/routa
 ```
 
-##### Step 3: Execute & Run
+##### Step 4: Run Routa
 ```bash
-# Run Routa on port 3000
+# Start Routa on port 3000
 routa dev 3000
 ```
 
@@ -92,7 +104,15 @@ routa dev 3000
 
 #### 🪟 3. Windows (Command Prompt / PowerShell)
 
-##### Option A: Using Pre-Built Executable
+##### Step 1: Clone the Repository & Enter Directory
+```powershell
+git clone https://github.com/7uyash/routa.git
+cd routa
+```
+
+##### Step 2: Run directly or Install Globally
+
+###### Option A: Run directly from `bin` folder
 ```powershell
 # For 64-bit Windows PC (AMD64):
 .\bin\routa-windows-amd64.exe dev 3000
@@ -101,7 +121,7 @@ routa dev 3000
 .\bin\routa-windows-arm64.exe dev 3000
 ```
 
-##### Option B: Install Globally in PowerShell
+###### Option B: Install Globally in PowerShell
 ```powershell
 Copy-Item .\bin\routa-windows-amd64.exe C:\Windows\System32\routa.exe
 routa dev 3000

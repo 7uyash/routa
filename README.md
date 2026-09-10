@@ -85,35 +85,47 @@ Pre-built binaries are available in `./bin` or can be cross-compiled with a sing
 | **Windows** | ARM64 | `bin/routa-windows-arm64.exe` |
 | **Windows** | AMD64 | `bin/routa-windows-amd64.exe` |
 
-### 📦 OS-by-OS Installation & Execution Guide
+### 📦 OS-by-OS Installation & Execution Guide (From Scratch)
 
 #### 🍏 1. macOS (Apple Silicon M1-M4 / Intel)
 ```bash
-# 1. Make binary executable
+# 1. Clone repo & enter directory
+git clone https://github.com/7uyash/routa.git
+cd routa
+
+# 2. Make binary executable
 chmod +x bin/routa-darwin-arm64  # (or routa-darwin-amd64 for Intel)
 
-# 2. Install to system PATH
+# 3. Install to system PATH
 sudo mv bin/routa-darwin-arm64 /usr/local/bin/routa
 
-# 3. Run Routa
+# 4. Run Routa
 routa dev 3000
 ```
 
 #### 🐧 2. Linux (Ubuntu, Debian, Fedora, Arch, Raspberry Pi)
 ```bash
-# 1. Make binary executable
+# 1. Clone repo & enter directory
+git clone https://github.com/7uyash/routa.git
+cd routa
+
+# 2. Make binary executable
 chmod +x bin/routa-linux-arm64   # (or routa-linux-amd64 for x86_64)
 
-# 2. Install to system PATH
+# 3. Install to system PATH
 sudo mv bin/routa-linux-arm64 /usr/local/bin/routa
 
-# 3. Run Routa
+# 4. Run Routa
 routa dev 3000
 ```
 
 #### 🪟 3. Windows (PowerShell / Command Prompt)
 ```powershell
-# Run directly from bin directory
+# 1. Clone repo & enter directory
+git clone https://github.com/7uyash/routa.git
+cd routa
+
+# 2. Run directly from bin directory
 .\bin\routa-windows-amd64.exe dev 3000
 
 # Or install globally to PATH
