@@ -74,10 +74,20 @@ go test -v ./...
 go vet ./...
 ```
 
-### Test Binary Compilation
+### Test Binary Compilation & Multi-Platform Cross-Building
+
+Verify that local compilation succeeds, or test cross-platform builds:
 
 ```bash
-go build ./cmd/routa/...
+# Local machine compilation
+go build -o bin/routa ./cmd/routa
+
+# Cross-compile all targets (macOS ARM64/AMD64, Linux ARM64/AMD64, Windows ARM64/AMD64)
+# On Linux/macOS:
+make build-all
+
+# On Windows (PowerShell):
+.\build.ps1
 ```
 
 ---

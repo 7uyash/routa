@@ -16,7 +16,43 @@ During backend and API development, developers often have to stitch together mul
 - **Toxiproxy / Chaos Mesh** to simulate laggy networks, server crashes, and timeouts.
 - **Custom scripts** to compare API responses when refactoring endpoints.
 
-**Routa consolidates all of these into one unified local gateway.** Combined with Zero-Config Discovery, Automatic API Mapping, the 1-Click Mock Lab, and the "Connect Anything" Public Webhook Gateway, Routa becomes the complete, end-to-end traffic control center for local development.
+**Routa consolidates all of these into one unified local gateway.** Combined with Zero-Config Discovery, Automatic API Mapping, the 1-Click Mock Lab, the "Connect Anything" Public Webhook Gateway, and **native cross-platform support for ARM64 and AMD64 (macOS Apple Silicon, Linux, and Windows)**, Routa becomes the complete, end-to-end traffic control center for local development.
+
+---
+
+## 💻 Cross-Platform & ARM64 Binary Support
+
+Routa is compiled for native performance across all major operating systems and CPU architectures:
+
+- **macOS Apple Silicon (ARM64)**: Native binary optimized for Apple M1, M2, M3, M4 Macs (`bin/routa-darwin-arm64`).
+- **macOS Intel (AMD64)**: Native binary for x86_64 Mac computers (`bin/routa-darwin-amd64`).
+- **Linux (ARM64 & AMD64)**: Native binaries for Ubuntu, Debian, Fedora, Arch, Raspberry Pi, and ARM servers (`bin/routa-linux-arm64` & `bin/routa-linux-amd64`).
+- **Windows (ARM64 & AMD64)**: Native `.exe` executables for ARM64 Windows laptops and standard x64 Windows PCs (`bin/routa-windows-arm64.exe` & `bin/routa-windows-amd64.exe`).
+
+### Quick Installation Guide
+
+#### macOS (Apple Silicon / M1-M4):
+```bash
+chmod +x bin/routa-darwin-arm64
+sudo mv bin/routa-darwin-arm64 /usr/local/bin/routa
+routa dev 3000
+```
+
+#### Linux (ARM64 / x86_64):
+```bash
+chmod +x bin/routa-linux-arm64
+sudo mv bin/routa-linux-arm64 /usr/local/bin/routa
+routa dev 3000
+```
+
+#### Building for All Platforms from Source:
+```bash
+# On Linux / macOS using Makefile:
+make build-all
+
+# On Windows using PowerShell:
+.\build.ps1
+```
 
 ---
 
