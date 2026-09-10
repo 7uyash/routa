@@ -16,6 +16,8 @@ import (
 
 	"github.com/7uyash/routa/config"
 	"github.com/7uyash/routa/diff"
+	"github.com/7uyash/routa/discovery"
+	"github.com/7uyash/routa/mock"
 	"github.com/7uyash/routa/recorder"
 	"github.com/7uyash/routa/replay"
 	"github.com/7uyash/routa/router"
@@ -36,6 +38,9 @@ type DashboardServer struct {
 	replay   *replay.Engine
 	storage  *storage.Store
 	webhook  *webhook.Lab
+	scanner  *discovery.Scanner
+	apiMap   *discovery.MapBuilder
+	mockLab  *mock.Lab
 	tunnel   *tunnel.Client
 	cfg      config.Config
 	server   *http.Server
@@ -49,7 +54,8 @@ type DashboardServer struct {
 
 // NewDashboardServer creates a dashboard server.
 func NewDashboardServer(port int, rec *recorder.Recorder, rep *replay.Engine,
-	store *storage.Store, wh *webhook.Lab, tun *tunnel.Client, cfg config.Config) *DashboardServer {
+	store *storage.Store, wh *webhook.Lab, scn *discovery.Scanner, apiMap *discovery.MapBuilder,
+	ml *mock.Lab, tun *tunnel.Client, cfg config.Config) *DashboardServer {
 
 	ds := &DashboardServer{
 		port:    port,
@@ -57,6 +63,9 @@ func NewDashboardServer(port int, rec *recorder.Recorder, rep *replay.Engine,
 		replay:  rep,
 		storage: store,
 		webhook: wh,
+		scanner: scn,
+		apiMap:  apiMap,
+		mockLab: ml,
 		tunnel:  tun,
 		cfg:     cfg,
 		upgrader: websocket.Upgrader{
@@ -93,6 +102,13 @@ func (ds *DashboardServer) Start() error {
 	mux.HandleFunc("/api/mutations", ds.handleMutations)
 	mux.HandleFunc("/api/simulations", ds.handleSimulations)
 	mux.HandleFunc("/api/shadow", ds.handleShadow)
+
+	// Phase 3 API routes: Discovery, API Map, Mock Lab, Connect Anything.
+	mux.HandleFunc("/api/discovery/services", ds.handleDiscoveryServices)
+	mux.HandleFunc("/api/discovery/proposals", ds.handleDiscoveryProposals)
+	mux.HandleFunc("/api/discovery/map", ds.handleAPIMap)
+	mux.HandleFunc("/api/mocks", ds.handleMocks)
+	mux.HandleFunc("/api/mocks/", ds.handleMockDetail)
 
 	// Serve embedded static files.
 	staticFS, err := fs.Sub(staticFiles, "dashboard/static")
@@ -347,15 +363,17 @@ func (ds *DashboardServer) handleWebhooks(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusOK, map[string]any{"endpoints": endpoints})
 
 	case "POST":
-		body, _ := io.ReadAll(io.LimitReader(r.Body, 1024))
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 2048))
 		var req struct {
-			Name string `json:"name"`
+			Name     string `json:"name"`
+			Provider string `json:"provider"`
+			Secret   string `json:"secret"`
 		}
 		json.Unmarshal(body, &req)
 		if req.Name == "" {
 			req.Name = "webhook"
 		}
-		ep := ds.webhook.CreateEndpoint(req.Name)
+		ep := ds.webhook.CreateEndpoint(req.Name, req.Provider, req.Secret)
 		writeJSON(w, http.StatusCreated, ep)
 
 	default:
@@ -375,6 +393,28 @@ func (ds *DashboardServer) handleWebhookDetail(w http.ResponseWriter, r *http.Re
 		return
 	}
 	id := parts[0]
+
+	// /api/webhooks/:id/toggle
+	if len(parts) > 1 && parts[1] == "toggle" && r.Method == "POST" {
+		active, ok := ds.webhook.ToggleEndpoint(id)
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]any{"error": "not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"id": id, "active": active})
+		return
+	}
+
+	// /api/webhooks/:id/test
+	if len(parts) > 1 && parts[1] == "test" && r.Method == "POST" {
+		delivery, ok := ds.webhook.SimulateTestDelivery(id)
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]any{"error": "endpoint not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"delivery": delivery, "status": "simulated"})
+		return
+	}
 
 	switch r.Method {
 	case "GET":
@@ -564,7 +604,7 @@ func (ds *DashboardServer) handleSimulations(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// handleShadow — GET: shadow config, PUT: update targets.
+// handleShadow — GET: shadow config.
 func (ds *DashboardServer) handleShadow(w http.ResponseWriter, r *http.Request) {
 	setCORS(w)
 	if r.Method == "OPTIONS" {
@@ -663,10 +703,214 @@ func (ds *DashboardServer) handleSessionPlayback(w http.ResponseWriter, r *http.
 	})
 }
 
-// handleRequestDetail with diff subpath support (already registered at /api/requests/)
-// We need to extend the existing handler to route /api/requests/:id/diff.
-// We do this inline in handleRequestDiff registered separately in Start().
-// However, we can re-route from handleRequestDetail. Nothing needed here.
+// ============================================================
+// Phase 3 Handlers: Service Discovery, API Map, Mock Lab
+// ============================================================
+
+// handleDiscoveryServices — GET: trigger scan & return discovered services.
+func (ds *DashboardServer) handleDiscoveryServices(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		// Return cached services without re-scanning
+		services := ds.scanner.GetServices()
+		writeJSON(w, http.StatusOK, map[string]any{"services": services})
+
+	case "POST":
+		// Trigger a fresh scan
+		go ds.scanner.Scan()
+		writeJSON(w, http.StatusAccepted, map[string]any{"status": "scan_started"})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleDiscoveryProposals — GET: list proposals; POST: confirm a proposal.
+func (ds *DashboardServer) handleDiscoveryProposals(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		proposals := ds.scanner.GetProposals()
+		writeJSON(w, http.StatusOK, map[string]any{"proposals": proposals})
+
+	case "POST":
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 4096))
+		var req struct {
+			Action      string `json:"action"` // "propose" or "confirm"
+			ID          string `json:"id"`
+			PathPattern string `json:"path_pattern"`
+			TargetURL   string `json:"target_url"`
+			ServiceName string `json:"service_name"`
+		}
+		json.Unmarshal(body, &req)
+
+		if req.Action == "confirm" {
+			prop, ok := ds.scanner.ConfirmProposal(req.ID)
+			if !ok {
+				writeJSON(w, http.StatusNotFound, map[string]any{"error": "proposal not found"})
+				return
+			}
+			// Apply the confirmed route into the router
+			if ds.agent != nil {
+				existing := ds.agent.router.Routes()
+				existing = append(existing, router.Route{
+					Pattern: prop.PathPattern,
+					Target:  prop.TargetURL,
+					Name:    prop.ServiceName,
+				})
+				ds.agent.router.SetRoutes(existing)
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"proposal": prop, "route_applied": true})
+			return
+		}
+
+		// Propose a new route
+		if req.PathPattern == "" || req.TargetURL == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "path_pattern and target_url required"})
+			return
+		}
+		prop := ds.scanner.ProposeRoute(req.PathPattern, req.TargetURL, req.ServiceName)
+		writeJSON(w, http.StatusCreated, prop)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleAPIMap — GET: return normalized API endpoint map from recorded traffic.
+func (ds *DashboardServer) handleAPIMap(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	entries := ds.rec.All()
+	endpointMap := ds.apiMap.BuildMap(entries)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"endpoints": endpointMap,
+		"total":     len(endpointMap),
+	})
+}
+
+// handleMocks — GET: list mocks; POST: create mock (manual or from-request).
+func (ds *DashboardServer) handleMocks(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		rules := ds.mockLab.ListRules()
+		writeJSON(w, http.StatusOK, map[string]any{"mocks": rules})
+
+	case "POST":
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 64*1024))
+		var req struct {
+			FromRequestID string            `json:"from_request_id"` // 1-click: convert captured entry
+			Name          string            `json:"name"`
+			Method        string            `json:"method"`
+			Path          string            `json:"path"`
+			Status        int               `json:"status"`
+			Headers       map[string]string `json:"headers"`
+			Body          string            `json:"body"`
+			DelayMs       int               `json:"delay_ms"`
+			Active        bool              `json:"active"`
+		}
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid JSON"})
+			return
+		}
+
+		// 1-click traffic-to-mock flow
+		if req.FromRequestID != "" {
+			entry := ds.rec.Get(req.FromRequestID)
+			if entry == nil {
+				writeJSON(w, http.StatusNotFound, map[string]any{"error": "request entry not found"})
+				return
+			}
+			rule := ds.mockLab.CreateFromRequest(entry)
+			writeJSON(w, http.StatusCreated, rule)
+			return
+		}
+
+		// Manual mock creation
+		if req.Method == "" {
+			req.Method = "GET"
+		}
+		if req.Status == 0 {
+			req.Status = 200
+		}
+		rule := ds.mockLab.CreateRule(req.Name, req.Method, req.Path, req.Status, req.Headers, req.Body, req.DelayMs, req.Active)
+		writeJSON(w, http.StatusCreated, rule)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleMockDetail — PUT: update mock; DELETE: remove mock.
+func (ds *DashboardServer) handleMockDetail(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	id := strings.TrimPrefix(r.URL.Path, "/api/mocks/")
+	if id == "" {
+		http.Error(w, "Missing mock ID", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case "PUT":
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 64*1024))
+		var req struct {
+			Name    string            `json:"name"`
+			Method  string            `json:"method"`
+			Path    string            `json:"path"`
+			Status  int               `json:"status"`
+			Headers map[string]string `json:"headers"`
+			Body    string            `json:"body"`
+			DelayMs int               `json:"delay_ms"`
+			Active  bool              `json:"active"`
+		}
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid JSON"})
+			return
+		}
+		rule, ok := ds.mockLab.UpdateRule(id, req.Name, req.Method, req.Path, req.Status, req.Headers, req.Body, req.DelayMs, req.Active)
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]any{"error": "mock not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, rule)
+
+	case "DELETE":
+		if ok := ds.mockLab.DeleteRule(id); !ok {
+			writeJSON(w, http.StatusNotFound, map[string]any{"error": "mock not found"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"deleted": true})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
 
 // Ensure unused imports don't cause build errors.
 var _ = recorder.Entry{}
