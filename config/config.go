@@ -58,9 +58,6 @@ func (c *Config) Validate(mode string) error {
 		if c.LocalPort <= 0 || c.LocalPort > 65535 {
 			return fmt.Errorf("local port must be between 1 and 65535, got %d", c.LocalPort)
 		}
-		if c.RelayURL == "" {
-			return fmt.Errorf("relay URL is required")
-		}
 		if c.DashboardPort <= 0 || c.DashboardPort > 65535 {
 			return fmt.Errorf("dashboard port must be between 1 and 65535, got %d", c.DashboardPort)
 		}
