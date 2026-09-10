@@ -40,7 +40,7 @@ type Config struct {
 func DefaultConfig() Config {
 	homeDir, _ := os.UserHomeDir()
 	return Config{
-		LocalHost:          "127.0.0.1",
+		LocalHost:          "localhost",
 		RelayURL:           "",
 		DashboardPort:      4040,
 		MaxRecordedEntries: 500,

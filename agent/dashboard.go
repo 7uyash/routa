@@ -173,6 +173,16 @@ func (ds *DashboardServer) handleRequests(w http.ResponseWriter, r *http.Request
 				filter.StatusCode = code
 			}
 		}
+		if s := r.URL.Query().Get("status_min"); s != "" {
+			if code, err := strconv.Atoi(s); err == nil {
+				filter.StatusMin = code
+			}
+		}
+		if s := r.URL.Query().Get("status_max"); s != "" {
+			if code, err := strconv.Atoi(s); err == nil {
+				filter.StatusMax = code
+			}
+		}
 		if l := r.URL.Query().Get("limit"); l != "" {
 			if limit, err := strconv.Atoi(l); err == nil {
 				filter.Limit = limit
@@ -736,9 +746,9 @@ func (ds *DashboardServer) handleDiscoveryServices(w http.ResponseWriter, r *htt
 		writeJSON(w, http.StatusOK, map[string]any{"services": services})
 
 	case "POST":
-		// Trigger a fresh scan
-		go ds.scanner.Scan()
-		writeJSON(w, http.StatusAccepted, map[string]any{"status": "scan_started"})
+		// Trigger a fresh scan and return updated services
+		services := ds.scanner.Scan()
+		writeJSON(w, http.StatusOK, map[string]any{"services": services, "status": "ok"})
 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

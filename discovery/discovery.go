@@ -170,12 +170,16 @@ func (s *Scanner) GetProposals() []*RouteProposal {
 
 // probePort checks if a local port is serving HTTP traffic and infers friendly tech stack name.
 func probePort(client *http.Client, port int) *Service {
-	targetURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	targetURL := fmt.Sprintf("http://localhost:%d", port)
 
-	// First check if TCP port is open
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 200*time.Millisecond)
+	// First check if TCP port is open (try localhost / dual-stack)
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", port), 200*time.Millisecond)
 	if err != nil {
-		return nil
+		// Fallback to 127.0.0.1
+		conn, err = net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 200*time.Millisecond)
+		if err != nil {
+			return nil
+		}
 	}
 	conn.Close()
 
