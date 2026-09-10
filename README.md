@@ -169,8 +169,9 @@ routa dev --config routa.yaml
 
 ## Documentation
 
-Detailed documentation is available in the [`docs/`](./docs) directory:
+Detailed documentation is available in the root and [`docs/`](./docs) directory:
 
+- [**About Routa**](./about.md) — Overview of what Routa is, core capabilities, architecture, and practical use cases with examples.
 - [**User Guide**](./docs/USAGE.md) — Comprehensive guide on CLI commands, dashboard features, webhook lab, mutation rules, simulations, and playback.
 - [**Configuration Reference**](./docs/CONFIGURATION.md) — Complete `routa.yaml` schema documentation.
 - [**Contributing Guide**](./docs/CONTRIBUTING.md) — Architecture breakdown, package layout, dev setup, and pull request guidelines.
