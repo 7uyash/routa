@@ -68,14 +68,54 @@
 
 - [Go 1.21+](https://go.dev/dl/) installed.
 
-### Installation
+### Installation & Binary Releases
 
-Clone the repository and build the binary:
+Routa supports **ARM64** and **AMD64** architectures across **macOS (Apple Silicon & Intel)**, **Linux**, and **Windows**.
+
+#### Pre-Built Cross-Platform Executables
+
+Pre-built binaries are available in `./bin` or can be cross-compiled with a single command:
+
+| Platform | Architecture | Binary File |
+| :--- | :--- | :--- |
+| **macOS** (Apple Silicon) | ARM64 | `bin/routa-darwin-arm64` |
+| **macOS** (Intel) | AMD64 | `bin/routa-darwin-amd64` |
+| **Linux** | ARM64 | `bin/routa-linux-arm64` |
+| **Linux** | AMD64 | `bin/routa-linux-amd64` |
+| **Windows** | ARM64 | `bin/routa-windows-arm64.exe` |
+| **Windows** | AMD64 | `bin/routa-windows-amd64.exe` |
+
+#### macOS / Linux Installation
 
 ```bash
-git clone https://github.com/7uyash/routa.git
-cd routa
-go build -o routa ./cmd/routa
+# Make binary executable and copy to system PATH
+chmod +x bin/routa-darwin-arm64    # For macOS Apple Silicon
+# or
+chmod +x bin/routa-linux-arm64     # For Linux ARM64
+
+sudo mv bin/routa-darwin-arm64 /usr/local/bin/routa
+routa --help
+```
+
+#### Building Cross-Platform Binaries from Source
+
+Using `make` (Linux / macOS):
+```bash
+make build-all
+```
+
+Using PowerShell (Windows):
+```powershell
+.\build.ps1
+```
+
+Or manually cross-compile using `go build`:
+```bash
+# macOS ARM64 (M1/M2/M3/M4)
+GOOS=darwin GOARCH=arm64 go build -o bin/routa ./cmd/routa
+
+# Linux ARM64
+GOOS=linux GOARCH=arm64 go build -o bin/routa ./cmd/routa
 ```
 
 ---
