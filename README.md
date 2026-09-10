@@ -20,11 +20,14 @@
 
 ## Features
 
+- **Zero-Config Service Discovery** — Automatically scan local ports, detect running HTTP services, suggest friendly names, and propose safe routing rules with user confirmation.
+- **Automatic API Discovery & Mapping** — Watch live traffic in real-time, group endpoints into a visual map, normalize dynamic URL paths (`/users/123` → `/users/{id}`), and display per-endpoint latency and error analytics.
+- **Instant Mock Lab (1-Click Traffic-to-Mock)** — Convert observed captured traffic directly into local mock endpoints with 1-click. Tweak method, path, response status/body, and simulate delays or error cases.
+- **"Connect Anything" Webhook Gateway** — Connect Stripe, GitHub, or any custom third-party provider to your local machine with public endpoints, signature verification options, ON/OFF toggle controls, event history, and a test connection simulator.
 - **Local HTTP Tunneling & Relay** — Expose local HTTP services to the internet via a self-hosted Relay server with automatic WebSocket connection management, multiplexing, heartbeat monitoring, and automatic reconnection.
 - **Live Traffic Inspector** — Embedded web dashboard (`http://localhost:4040`) featuring real-time WebSocket push updates, full request/response headers & body inspection, timing breakdowns, and search/filtering.
 - **Replay & Edit-Replay** — Re-fire any recorded HTTP request with a single click or modify headers, query params, and JSON request bodies inline before re-sending.
 - **Multi-Service Routing** — Declarative pattern matching (`/api/v1/*`, `/auth/*`, `/*`) to route traffic to multiple local backend microservices seamlessly.
-- **Webhook Testing Lab** — Inspect incoming webhooks instantly with provider auto-detection (GitHub, Stripe, Shopify, Discord, Slack, Twilio, SendGrid, PayPal) and signature header verification.
 - **Traffic Mutation & Mock Engine** — Inject/strip headers, rewrite URL paths, modify JSON request bodies via dot-path expressions, mock JSON responses, or force HTTP status codes on the fly.
 - **Network & Failure Simulator** — Test application resilience by injecting fixed/jittered latency, simulating connection drops, forcing configurable error rates (e.g. 50% 500 errors), or imposing artificial backend timeouts.
 - **Shadow Traffic & Deep Response Differ** — Forward production/staging traffic asynchronously to a shadow target URL and compare responses side-by-side with deep JSON body diffing.

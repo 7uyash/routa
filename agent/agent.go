@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/7uyash/routa/config"
+	"github.com/7uyash/routa/discovery"
 	"github.com/7uyash/routa/middleware"
+	"github.com/7uyash/routa/mock"
 	"github.com/7uyash/routa/protocol"
 	"github.com/7uyash/routa/proxy"
 	"github.com/7uyash/routa/recorder"
@@ -22,7 +24,7 @@ import (
 )
 
 // Agent is the main local component that orchestrates tunnel, proxy,
-// recording, replay, and the dashboard.
+// recording, replay, discovery, mock lab, and the dashboard.
 type Agent struct {
 	cfg       config.Config
 	tunnel    *tunnel.Client
@@ -33,6 +35,10 @@ type Agent struct {
 	storage   *storage.Store
 	webhook   *webhook.Lab
 	dashboard *DashboardServer
+
+	scanner   *discovery.Scanner
+	apiMap    *discovery.MapBuilder
+	mockLab   *mock.Lab
 
 	mutator   *middleware.Mutator
 	simulator *middleware.Simulator
@@ -64,6 +70,10 @@ func New(cfg config.Config) *Agent {
 	wh := webhook.NewLab()
 	rep := replay.New(fwd, rec)
 
+	scn := discovery.NewScanner()
+	apiMap := discovery.NewMapBuilder()
+	mockLab := mock.NewLab()
+
 	var mutRules []config.MutationConfig
 	var simRules []config.SimulationConfig
 	var shadCfg config.ShadowConfig
@@ -81,6 +91,9 @@ func New(cfg config.Config) *Agent {
 		router:    rtr,
 		storage:   store,
 		webhook:   wh,
+		scanner:   scn,
+		apiMap:    apiMap,
+		mockLab:   mockLab,
 		mutator:   middleware.NewMutator(mutRules),
 		simulator: middleware.NewSimulator(simRules),
 		shadower:  shadow.New(shadCfg),
@@ -97,8 +110,7 @@ func New(cfg config.Config) *Agent {
 	}
 
 	// Create dashboard server.
-	// We pass mutator/simulator/shadower into it later if we need to modify them via API.
-	a.dashboard = NewDashboardServer(cfg.DashboardPort, rec, rep, store, wh, a.tunnel, cfg)
+	a.dashboard = NewDashboardServer(cfg.DashboardPort, rec, rep, store, wh, scn, apiMap, mockLab, a.tunnel, cfg)
 	a.dashboard.agent = a // Link back to agent to update routes/mutations
 
 	return a
@@ -118,6 +130,12 @@ func (a *Agent) Start(ctx context.Context) error {
 	if a.shadower.TargetCount() > 0 {
 		log.Printf("[agent] shadowing to %d target(s)", a.shadower.TargetCount())
 	}
+
+	// Initial discovery scan
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		a.scanner.Scan()
+	}()
 
 	// Connect tunnel (blocks until stopped or fatal error).
 	return a.tunnel.Connect(ctx)
@@ -171,7 +189,34 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 		a.webhook.RecordDelivery(epID, reqMsg.Method, reqMsg.Headers, reqMsg.Body)
 	}
 
-	// 2. Traffic Mutation (Request Phase)
+	// 2. Mock Lab match check (Short-circuits backend forwarding if mock rule matches)
+	if mockRule := a.mockLab.MatchRequest(reqMsg.Method, reqMsg.Path); mockRule != nil {
+		status, headers, body := mockRule.ServeMock()
+		entry := &recorder.Entry{
+			Timestamp:      start,
+			Method:         reqMsg.Method,
+			Path:           reqMsg.Path,
+			Query:          reqMsg.Query,
+			RequestHeaders: reqMsg.Headers,
+			RequestBody:    reqMsg.Body,
+			StatusCode:     status,
+			ResponseHeaders: make(map[string][]string),
+			ResponseBody:   body,
+			Duration:       time.Since(start),
+			Host:           reqMsg.Host,
+			Source:         "mock_lab",
+		}
+		for k, v := range headers {
+			entry.ResponseHeaders[k] = []string{v}
+		}
+
+		a.recorder.Record(entry)
+		a.sendHTTPResponse(frame.RequestID, status, entry.ResponseHeaders, body)
+		log.Printf("[agent] [Mock Lab] %s %s → %d (%s)", reqMsg.Method, reqMsg.Path, status, entry.Duration.Round(time.Millisecond))
+		return
+	}
+
+	// 3. Traffic Mutation (Request Phase)
 	mutReq := a.mutator.ApplyToRequest(reqMsg.Method, reqMsg.Path, reqMsg.Query, reqMsg.Headers, reqMsg.Body)
 
 	// Build base recorder entry
@@ -186,7 +231,7 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 		Source:         "tunnel",
 	}
 
-	// If mock response is injected, skip everything else
+	// If mock response is injected via mutation rule, skip backend
 	if mutReq.MockResponse != nil {
 		entry.StatusCode = mutReq.MockResponse.Status
 		hdr := make(map[string][]string)
@@ -202,10 +247,9 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 		return
 	}
 
-	// 3. Network Simulation
+	// 4. Network Simulation
 	simRes := a.simulator.Simulate(mutReq.Method, mutReq.Path)
 	if simRes.ShouldDrop {
-		// Log drop but don't record or respond
 		log.Printf("[agent] dropping request to %s (rule: %s)", mutReq.Path, simRes.MatchedRule)
 		return
 	}
@@ -220,7 +264,7 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 		middleware.ApplyDelay(simRes)
 	}
 
-	// 4. Routing
+	// 5. Routing
 	target := a.router.Match(mutReq.Path)
 	if target == "" {
 		target = a.cfg.LocalTarget()
@@ -231,12 +275,12 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 	}
 	entry.FullURL = targetURL
 
-	// 5. Shadow Traffic
+	// 6. Shadow Traffic
 	if a.shadower.TargetCount() > 0 {
 		go a.shadower.Shadow(entry, mutReq.Method, mutReq.Path, mutReq.Query, mutReq.Headers, mutReq.Body)
 	}
 
-	// 6. Forward to primary target
+	// 7. Forward to primary target
 	resp, err := a.proxy.Forward(mutReq.Method, targetURL, mutReq.Headers, mutReq.Body)
 
 	var outStatus int
@@ -255,7 +299,7 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 		entry.TimingBreakdown = resp.Timing
 	}
 
-	// 7. Traffic Mutation (Response Phase)
+	// 8. Traffic Mutation (Response Phase)
 	mutStatus, mutHeaders, mutBody := a.mutator.ApplyToResponse(mutReq.Method, mutReq.Path, outStatus, outHeaders, outBody)
 
 	entry.StatusCode = mutStatus

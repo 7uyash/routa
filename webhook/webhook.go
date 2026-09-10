@@ -1,10 +1,11 @@
-// Package webhook provides a webhook lab for receiving, inspecting,
-// and replaying webhook deliveries from external services.
+// Package webhook provides a webhook lab ("Connect Anything") for receiving, inspecting,
+// testing, and replaying webhook deliveries from external services.
 package webhook
 
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -20,15 +21,18 @@ var KnownSignatureHeaders = map[string]string{
 	"Slack":    "X-Slack-Signature",
 	"SendGrid": "X-Twilio-Email-Event-Webhook-Signature",
 	"PayPal":   "Paypal-Transmission-Sig",
+	"Custom":   "X-Custom-Webhook-Signature",
 }
 
-// Endpoint represents a webhook endpoint created in the webhook lab.
+// Endpoint represents a webhook endpoint created in the "Connect Anything" webhook lab.
 type Endpoint struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
-	Path      string    `json:"path"` // e.g., "/webhook/abc123"
+	Provider  string    `json:"provider"` // "Stripe", "GitHub", "Shopify", "Slack", "Custom", etc.
+	Path      string    `json:"path"`     // e.g., "/webhook/abc123"
+	Secret    string    `json:"secret,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
-	Active    bool      `json:"active"`
+	Active    bool      `json:"active"` // ON/OFF Connection Toggle Control
 }
 
 // Delivery represents a single webhook delivery to an endpoint.
@@ -43,6 +47,7 @@ type Delivery struct {
 	SignatureHeader string              `json:"signature_header,omitempty"`
 	SignatureValue  string              `json:"signature_value,omitempty"`
 	Provider        string              `json:"provider,omitempty"`
+	IsTestPayload   bool                `json:"is_test_payload"`
 	Processed       bool                `json:"processed"`
 }
 
@@ -61,22 +66,78 @@ func NewLab() *Lab {
 	}
 }
 
-// CreateEndpoint creates a new webhook endpoint.
-func (l *Lab) CreateEndpoint(name string) *Endpoint {
+// CreateEndpoint creates a new webhook endpoint for any provider.
+func (l *Lab) CreateEndpoint(name, provider, secret string) *Endpoint {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
+	if provider == "" {
+		provider = "Custom"
+	}
 
 	id := generateWebhookID()
 	ep := &Endpoint{
 		ID:        id,
 		Name:      name,
+		Provider:  provider,
 		Path:      "/webhook/" + id,
+		Secret:    secret,
 		CreatedAt: time.Now(),
 		Active:    true,
 	}
 	l.endpoints[id] = ep
 	l.deliveries[id] = make([]*Delivery, 0)
 	return ep
+}
+
+// ToggleEndpoint toggles the active ON/OFF connection state for an endpoint.
+func (l *Lab) ToggleEndpoint(id string) (bool, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	ep, ok := l.endpoints[id]
+	if !ok {
+		return false, false
+	}
+
+	ep.Active = !ep.Active
+	return ep.Active, true
+}
+
+// SimulateTestDelivery fires a simulated test connection payload to verify endpoint handler logic.
+func (l *Lab) SimulateTestDelivery(endpointID string) (*Delivery, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	ep, ok := l.endpoints[endpointID]
+	if !ok {
+		return nil, false
+	}
+
+	sigHeader := KnownSignatureHeaders[ep.Provider]
+	if sigHeader == "" {
+		sigHeader = "X-Webhook-Signature"
+	}
+
+	testPayload := fmt.Sprintf(`{"event": "test.connection", "provider": "%s", "timestamp": %d, "status": "simulated_success"}`, ep.Provider, time.Now().Unix())
+
+	d := &Delivery{
+		ID:              generateWebhookID(),
+		EndpointID:      endpointID,
+		Timestamp:       time.Now(),
+		Method:          "POST",
+		Headers:         map[string][]string{"Content-Type": {"application/json"}, sigHeader: {"test_simulated_sig_123"}},
+		Body:            []byte(testPayload),
+		ContentType:     "application/json",
+		SignatureHeader: sigHeader,
+		SignatureValue:  "test_simulated_sig_123",
+		Provider:        ep.Provider,
+		IsTestPayload:   true,
+		Processed:       true,
+	}
+
+	l.deliveries[endpointID] = append(l.deliveries[endpointID], d)
+	return d, true
 }
 
 // GetEndpoint returns an endpoint by ID.
@@ -102,8 +163,18 @@ func (l *Lab) RecordDelivery(endpointID string, method string, headers map[strin
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	// Detect provider and signature.
-	provider, sigHeader, sigValue := detectProvider(headers)
+	ep := l.endpoints[endpointID]
+	provider := "Custom"
+	if ep != nil && ep.Provider != "" {
+		provider = ep.Provider
+	} else {
+		detected, _, _ := detectProvider(headers)
+		if detected != "" {
+			provider = detected
+		}
+	}
+
+	_, sigHeader, sigValue := detectProvider(headers)
 
 	contentType := ""
 	if ct, ok := headers["Content-Type"]; ok && len(ct) > 0 {
@@ -139,8 +210,7 @@ func (l *Lab) GetDeliveries(endpointID string) []*Delivery {
 	return result
 }
 
-// MatchPath checks if a request path matches any webhook endpoint.
-// Returns the endpoint ID if matched.
+// MatchPath checks if a request path matches any active webhook endpoint.
 func (l *Lab) MatchPath(path string) string {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -160,7 +230,6 @@ func (l *Lab) DeleteEndpoint(id string) {
 	delete(l.deliveries, id)
 }
 
-// detectProvider detects the webhook provider from signature headers.
 func detectProvider(headers map[string][]string) (provider, sigHeader, sigValue string) {
 	for prov, header := range KnownSignatureHeaders {
 		for k, vals := range headers {

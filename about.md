@@ -2,7 +2,7 @@
 
 **Routa** (pronounced */ru-ta/*) is an all-in-one **High-Performance Developer Traffic Gateway, Local Tunneling System, HTTP Inspector, and Chaos Engineering Toolkit** written in Go.
 
-It sits as an intelligent layer between incoming network traffic (frontend applications, public webhooks, remote clients) and your local backend microservices. Routa gives developers **100% real-time visibility, total traffic control, and advanced simulation capabilities** over every single HTTP request and response — all through a single, lightweight binary and an embedded web dashboard.
+It sits as an intelligent layer between incoming network traffic (frontend applications, public webhooks, remote clients) and your local backend microservices. Routa gives developers **100% real-time visibility, total traffic control, automatic API discovery, zero-config service discovery, an instant mock lab, and advanced simulation capabilities** over every single HTTP request and response — all through a single, lightweight binary and an embedded web dashboard.
 
 ---
 
@@ -12,10 +12,11 @@ During backend and API development, developers often have to stitch together mul
 - **Ngrok / Localtunnel** to expose local endpoints to webhooks or external servers.
 - **Postman / Insomnia / curl** to capture, craft, edit, and resend HTTP requests.
 - **Charles Proxy / Fiddler / Wireshark** to inspect headers, timing, and JSON payloads.
+- **Mockoon / Prism / WireMock** to manually stub out endpoints and create mock servers.
 - **Toxiproxy / Chaos Mesh** to simulate laggy networks, server crashes, and timeouts.
 - **Custom scripts** to compare API responses when refactoring endpoints.
 
-**Routa consolidates all of these into one unified local gateway.** With zero external dependencies, Routa lets you inspect, tunnel, route, mutate, mock, simulate failures, and diff traffic seamlessly on your machine.
+**Routa consolidates all of these into one unified local gateway.** Combined with Zero-Config Discovery, Automatic API Mapping, the 1-Click Mock Lab, and the "Connect Anything" Public Webhook Gateway, Routa becomes the complete, end-to-end traffic control center for local development.
 
 ---
 
@@ -24,13 +25,16 @@ During backend and API development, developers often have to stitch together mul
 | Capability | What Routa Does |
 | :--- | :--- |
 | 🔍 **Live Traffic Inspector** | Real-time streaming web dashboard (`http://localhost:4040`) displaying full headers, JSON bodies, timing metrics, and status codes. |
+| 🕵️ **Zero-Config Service Discovery** | Automatically scans local ports, detects running HTTP services, suggests friendly names, and proposes route rules with user confirmation. |
+| 🗺️ **Automatic API Discovery & Mapping** | Watches live traffic, groups endpoints into a visual map, normalizes dynamic paths (`/users/123` → `/users/{id}`), and tracks per-endpoint metrics. |
+| 🧪 **Mock Lab (1-Click Traffic-to-Mock)** | Instantly convert captured traffic into local mock endpoints. Click "Create Mock", tweak response status/body, simulate delays, and serve. |
+| 🌐 **"Connect Anything" Webhook Gateway** | Create public webhook endpoints for Stripe, GitHub, or any custom service with signature validation, ON/OFF toggles, and test connection buttons. |
 | 🚀 **Local Tunneling & Relay** | Expose your local port (e.g. `3000`) securely to the public internet via a self-hosted edge Relay with WebSocket multiplexing. |
 | 🔄 **1-Click Replay & Edit-Replay** | Re-fire captured requests instantly or edit HTTP methods, headers, parameters, and JSON payloads inline before resending. |
 | 🔀 **Multi-Service Routing** | Route different URL paths (e.g. `/api/v1/auth/*`, `/api/v1/payments/*`) to different local ports and backend microservices. |
 | 🛠️ **Traffic Mutation & Response Mocking** | Intercept traffic on-the-fly to inject/strip headers, rewrite URL paths, modify JSON fields via dot-paths (`user.role=admin`), or mock status responses. |
 | 💣 **Network & Failure Simulator** | Test application resilience by injecting latency/jitter, simulating connection drops, forcing configurable error rates (e.g., 10% 500s), or enforcing timeouts. |
 | 👥 **Shadow Traffic & Deep Response Differ** | Asynchronously duplicate live traffic to a secondary "shadow" URL (e.g., v2 API) and compare JSON responses side-by-side with color-coded diffing. |
-| ⚓ **Webhook Testing Lab** | Auto-detect signature headers for providers (GitHub, Stripe, Shopify, Slack, Discord, Twilio, SendGrid, PayPal) and log delivery history. |
 | 💾 **Session Fixtures & Playback** | Save request history into JSON session files and run deterministic playbacks with preserved inter-request timing. |
 
 ---
@@ -38,28 +42,28 @@ During backend and API development, developers often have to stitch together mul
 ## 🏗️ Architecture Overview
 
 ```text
-                        PUBLIC INTERNET / CLIENTS / WEBHOOKS
-                                         |
-                                         v
-                              +--------------------+
-                              |    Routa Relay     |  (Public Edge Server)
-                              +--------------------+
-                                         | WebSocket Tunnel
-                                         v
-                              +--------------------+
-                              |    Routa Agent     |  (Local Gateway)
-                              +--------------------+
-                                 /       |       \
-                                /        |        \
+                        PUBLIC INTERNET / CLIENTS / WEBHOOKS / CONNECT ANYTHING
+                                                 |
+                                                 v
+                                      +--------------------+
+                                      |    Routa Relay     |  (Public Edge Server)
+                                      +--------------------+
+                                                 | WebSocket Tunnel
+                                                 v
+                                      +--------------------+
+                                      |    Routa Agent     |  (Local Gateway)
+                                      +--------------------+
+                                         /       |       \
+                                        /        |        \
             +------------------+ +---------------+ +------------------+
-            |  Dashboard UI    | |  Mutation &   | |   Webhook Lab    |
-            |  (:4040 SPA)     | |  Simulator    | |   & Signature    |
+            |  Dashboard UI    | |  Service &    | |  Mock Lab &      |
+            |  (:4040 SPA)     | |  API Discovery| |  Connect Anything|
             +------------------+ +---------------+ +------------------+
-                                         |
-                                         v
-                              +--------------------+
-                              |  Local Service(s)  |  (http://127.0.0.1:3000)
-                              +--------------------+
+                                                 |
+                                                 v
+                                      +--------------------+
+                                      |  Local Service(s)  |  (http://127.0.0.1:3000)
+                                      +--------------------+
 ```
 
 ---
@@ -68,9 +72,82 @@ During backend and API development, developers often have to stitch together mul
 
 ---
 
-### 1. Expose a Local Backend to the Internet (Tunneling & Webhooks)
+### 1. Zero-Config Local Service Discovery
 
-**The Use Case:** You are developing a local app on `http://localhost:3000` and need to test incoming webhooks from Stripe or GitHub, or demo your work to a teammate without deploying to staging.
+**The Use Case:** You have 4 backend microservices running across different local ports (`3000`, `8080`, `8081`, `5000`) and don't want to manually locate ports or type out complex proxy configs.
+
+**How it works in Routa:**
+
+1. Routa automatically scans local ports upon startup.
+2. The Dashboard displays an active list of detected HTTP services with auto-suggested friendly names (e.g. `Node.js App (:3000)`, `Go Auth Service (:8081)`).
+3. **1-Click Action:** Click on any detected service to route traffic to it, inspect its requests, or open it in your browser.
+4. **Safety-First Routing Proposals:** Routa detects unmapped traffic patterns and proposes new routing rules in the dashboard for **user confirmation** — preventing accidental breaking changes to your environment.
+
+---
+
+### 2. Automatic API Discovery & Visual Endpoint Mapping
+
+**The Use Case:** As your application runs, you want to see a clean, organized map of your entire API surface with per-endpoint latency, request counts, and error rates, without writing OpenAPI/Swagger specs manually.
+
+**How it works in Routa:**
+
+1. Routa observes live incoming and outgoing HTTP traffic in real time.
+2. It intelligently normalizes parameter paths (e.g., automatically collapsing `/users/123` and `/users/456` into `/users/{id}`).
+3. Endpoints are grouped visually in an **API Map** displaying:
+   - Request volumes & HTTP method distribution (`GET`, `POST`, `PUT`, `DELETE`).
+   - Average latency and error rates per normalized route.
+   - Request and response body schema previews.
+
+---
+
+### 3. The Instant Mock Lab (Traffic-to-Mock in 1-Click)
+
+**The Use Case:** Your frontend team needs to work on a new feature, but the backend API endpoint isn't finished yet — or you need to reproduce a rare 500 error response without altering server code.
+
+**How to do it with Routa:**
+
+- **Easiest Flow (1-Click Traffic-to-Mock):**
+  1. Find any real captured request in your Dashboard request stream.
+  2. Click **"Create Mock"**.
+  3. Routa auto-populates the HTTP method, normalized URL path, headers, and captured JSON response body.
+  4. Tweak the status code (e.g., `200 OK` or `500 Internal Error`), edit the JSON payload if needed, and set an optional delay (e.g., `250ms`).
+  5. Click **Save & Activate**. Routa instantly serves this mock locally, bypassing the backend!
+
+- **Manual Mock Creation:**
+  Define custom mocks directly in the Dashboard **Mock Lab** or in `routa.yaml`:
+  ```yaml
+  mutations:
+    - name: "Mock Order Status API"
+      match:
+        path: "/api/v1/orders/status"
+      request:
+        mock_response:
+          status: 200
+          body: '{"order_id": "ord_999", "status": "processing", "mocked": true}'
+  ```
+
+---
+
+### 4. "Connect Anything" — Universal Webhook & Public Gateway
+
+**The Use Case:** You need to integrate webhooks from Stripe, GitHub, Shopify, Twilio, Slack, or any custom third-party provider into your local development machine — without setting up complex public servers or exposing raw ports.
+
+**How it works in Routa:**
+
+1. Open the **Connect Anything** tab in the Routa Dashboard.
+2. Choose a pre-configured provider template (**Stripe**, **GitHub**, **Shopify**, **Slack**, **Discord**) or select **Custom Webhook** to **connect anything**.
+3. Routa generates a secure public URL (e.g. `http://my-app.relay.example.com:8080/webhook/wh_xyz123`).
+4. **Key Features & Controls:**
+   - **Signature Verification:** Built-in secret key verification options (`X-Hub-Signature-256`, `Stripe-Signature`, etc.).
+   - **Connection ON/OFF Toggle:** Disable incoming webhooks with a single toggle switch without deleting the endpoint configuration.
+   - **Test Connection Simulator:** Click **"Test Connection"** to fire mock test payloads directly to your local handler to verify your logic *before* real external traffic hits.
+   - **Full Event History:** Reuses Routa's core traffic inspection, timing breakdown, and 1-click request replay pipelines.
+
+---
+
+### 5. Expose a Local Backend to the Internet (Tunneling & Relay)
+
+**The Use Case:** You want to expose your local web application on `http://localhost:3000` to external users or remote team members.
 
 **How to do it with Routa:**
 
@@ -94,48 +171,40 @@ routa dev 3000 --relay ws://relay.example.com:8080 --name my-app
   Subdomain:     my-app
 ```
 
-*Now, any request sent to `http://my-app.relay.example.com:8080` is instantly multiplexed over WebSockets and proxied to your local `localhost:3000`.*
-
 ---
 
-### 2. Inspect Real-Time HTTP Traffic in the Web Dashboard
+### 6. Inspect Real-Time HTTP Traffic in the Web Dashboard
 
-**The Use Case:** Your frontend app gets an unexpected error when calling your API. You need to inspect exact raw headers, JSON payloads, timing breakdowns, and status codes.
+**The Use Case:** Debugging why a client application receives a `400 Bad Request` or inspecting raw request/response headers and body frames.
 
 **How to do it with Routa:**
 
 1. Open **`http://localhost:4040`** in your browser while `routa dev` is running.
-2. Requests stream in real-time over WebSocket push.
-3. Click any request row to view:
-   - **Headers Tab:** View incoming request headers and outgoing response headers.
-   - **Body Tab:** View formatted/pretty-printed JSON payloads or raw text.
-   - **Timing Tab:** See duration breakdown and proxy overhead.
+2. Requests stream in real-time over WebSocket push with zero page refreshes.
+3. Inspect headers, pretty-printed JSON payloads, query parameters, and proxy processing time.
 
 ---
 
-### 3. Replay & Edit-Replay Captured Requests
+### 7. Replay & Edit-Replay Captured Requests
 
-**The Use Case:** You found a bug in a `POST /api/v1/orders` endpoint. Instead of using curl or Postman to recreate the complex JSON body, you want to modify a field and resend the request directly from your browser.
+**The Use Case:** Fixing a bug in a `POST /api/v1/orders` endpoint without using curl or Postman to recreate complex JSON payloads.
 
 **How to do it with Routa:**
 
-1. In the Dashboard (`http://localhost:4040`), select the target `POST` request.
+1. Select the captured request in the Dashboard (`http://localhost:4040`).
 2. Click **Replay** to resend the exact request immediately.
-3. Or click **Edit & Replay** to open an interactive editor:
-   - Change HTTP method (e.g. `POST` → `PUT`).
-   - Add/edit headers (e.g. `Authorization: Bearer test-token`).
-   - Edit the JSON request body (e.g. change `"quantity": 1` to `"quantity": 5`).
-4. Click **Send Request** to fire the edited request. The new request will be tagged with a `Replay` badge in your stream.
+3. Click **Edit & Replay** to open the interactive editor:
+   - Change HTTP method (`POST` → `PUT`).
+   - Add/edit headers (`Authorization: Bearer test-token`).
+   - Modify JSON request body fields inline.
+4. Click **Send Request** to execute. Replayed requests are tagged with a `Replay` badge.
 
 ---
 
-### 4. Split Traffic Across Multiple Local Microservices (Declarative Routing)
+### 8. Multi-Service Microservice Routing
 
-**The Use Case:** You have multiple local services running on different ports (`auth` service on `8081`, `users` service on `8082`, `frontend` on `3000`) and want a single gateway entry point.
+**The Use Case:** Split traffic across multiple local backend microservices using declarative route rules in `routa.yaml`:
 
-**How to do it with Routa:**
-
-Define routing rules in `routa.yaml`:
 ```yaml
 version: "1"
 agent:
@@ -151,26 +220,14 @@ routes:
     target: "http://localhost:3000"
 ```
 
-Run Routa with the config:
-```bash
-routa dev --config routa.yaml
-```
-
-*Requests to `/api/v1/auth/login` seamlessly route to port `8081`, `/api/v1/users/profile` routes to `8082`, and all other traffic routes to `3000`.*
-
 ---
 
-### 5. Mutate Request Headers, JSON Payloads & Mock Responses
+### 9. Mutate Request Headers & JSON Payloads
 
-**The Use Case:** 
-- **Scenario A (Header/Body Injection):** Test how your application behaves when receiving an `admin` role without modifying your database or client code.
-- **Scenario B (Response Mocking):** Work on a frontend feature against an unbuilt backend endpoint by mocking the API response.
-
-**How to do it with Routa (`routa.yaml`):**
+**The Use Case:** Test authorization roles or strip sensitive tokens on-the-fly without altering client code:
 
 ```yaml
 mutations:
-  # Scenario A: Header & JSON payload mutation
   - name: "Inject Admin Context"
     match:
       path: "/api/v1/profile"
@@ -178,58 +235,35 @@ mutations:
     request:
       set_headers:
         X-Debug-Mode: "true"
-        X-Tenant-ID: "tenant_123"
-      remove_headers:
-        - "X-Internal-Secret"
-      add_query_params:
-        trace: "enabled"
       set_body_json:
         "user.role": "admin"
-        "user.permissions.can_delete": "true"
       remove_body_json:
         - "user.ssn"
-
-  # Scenario B: Mock API response directly (Bypasses backend server)
-  - name: "Mock Maintenance Status"
-    match:
-      path: "/api/v1/system-status"
-    request:
-      mock_response:
-        status: 503
-        body: '{"status": "maintenance", "message": "Scheduled upgrades in progress", "retry_in_seconds": 300}'
 ```
 
 ---
 
-### 6. Inject Latency & Failures (Network Chaos Engineering)
+### 10. Inject Latency & Failures (Network Chaos Engineering)
 
-**The Use Case:** You want to make sure your frontend app displays a proper loading spinner or retry prompt when the API suffers high latency, intermittent 500 errors, or sudden connection drops.
-
-**How to do it with Routa (`routa.yaml`):**
+**The Use Case:** Test frontend loading spinners, timeouts, and error handling against unpredictable network conditions:
 
 ```yaml
 simulations:
   - name: "Staging Latency & Flaky Connection Test"
     match:
       path: "/api/v1/payments/*"
-      method: "POST"
     latency_ms: 350       # Adds 350ms base delay
-    jitter_ms: 75         # Latency varies by ±75ms (275ms - 425ms)
-    error_rate: 0.15      # 15% of requests randomly fail
-    error_status: 500     # Returns 500 Internal Server Error
-    drop_rate: 0.02       # 2% of TCP connections drop abruptly
-    timeout_ms: 2000      # Cancel requests taking longer than 2s
+    jitter_ms: 75         # Latency varies ±75ms
+    error_rate: 0.15      # 15% random 500 errors
+    error_status: 500
+    drop_rate: 0.02       # 2% connection drops
 ```
-
-*You can also toggle and tweak these simulation settings dynamically live in the **Simulator** tab of the Web Dashboard!*
 
 ---
 
-### 7. Shadow Traffic & Deep Response Differ (Safe API Migrations)
+### 11. Shadow Traffic & Deep Response Differ
 
-**The Use Case:** You rewritten your search service from Node.js (`localhost:3000`) to Go (`localhost:9090`). You want to duplicate live incoming requests to the new service and verify side-by-side that both services return identical JSON structures before swapping in production.
-
-**How to do it with Routa (`routa.yaml`):**
+**The Use Case:** Asynchronously duplicate live traffic to a secondary target (`localhost:9090`) and run deep JSON diffing to verify API refactors before swapping in production:
 
 ```yaml
 shadows:
@@ -240,54 +274,29 @@ shadows:
     compare_response: true
 ```
 
-**How it executes:**
-1. Incoming request arrives at `/api/v1/search`.
-2. Routa proxies the request to the primary service (`localhost:3000`) and returns its response to the user.
-3. Simultaneously, Routa asynchronously clones the request and sends it to `localhost:9090`.
-4. The **Deep Response Differ** engine compares HTTP status codes, headers, and nested JSON keys/values.
-5. Visual side-by-side diff highlights show exact field mismatches in the Dashboard **Diff** tab.
-
 ---
 
-### 8. Webhook Testing Lab & Provider Signature Verification
+### 12. Session Persistence & Deterministic Playback
 
-**The Use Case:** You are integrating third-party webhooks (e.g. Stripe checkout events or GitHub push events) and need to verify payload signatures and inspect incoming events locally.
-
-**How to do it with Routa:**
-
-1. Open the **Webhook Lab** tab in the Routa Dashboard.
-2. Click **Create Endpoint** to generate a dedicated webhook URL.
-3. Configure your third-party provider (Stripe, GitHub, Shopify, Slack, Discord, Twilio, SendGrid, PayPal) to deliver payloads to this URL.
-4. Routa automatically detects provider signature headers (`X-Hub-Signature-256`, `Stripe-Signature`, etc.), verifies checksums, and formats the event history.
-
----
-
-### 9. Session Persistence & Deterministic Playback
-
-**The Use Case:** You captured a sequence of 20 API requests during a tricky bug reproduction session. You want to save this session fixture to share with teammates or run automated playback tests.
-
-**How to do it with Routa:**
-
-1. In the Web Dashboard, click **Save Session** and name it (e.g., `checkout-bug-repro`).
-2. Routa saves the request collection as a JSON fixture under `~/.routa/sessions/checkout-bug-repro.json`.
-3. To replay the sequence deterministically with preserved inter-request timing:
-   - Click **Run Playback** in the Dashboard or trigger it via the API.
-   - All recorded requests re-fire sequentially against your target backend.
+**The Use Case:** Save request streams into JSON session fixtures (`~/.routa/sessions/bug-repro.json`) and replay them sequentially with realistic timing intervals for automated regression testing.
 
 ---
 
 ## 📊 How Routa Compares to Other Tools
 
-| Feature | Routa 🌐 | Ngrok | Postman | Fiddler / Charles | Toxiproxy |
+| Feature | Routa 🌐 | Ngrok | Postman | Prism / Mockoon | Toxiproxy |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Local HTTP Traffic Inspector** | ✅ | ⚠️ Basic | ❌ | ✅ | ❌ |
+| **Zero-Config Service Discovery** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Automatic API Discovery & Mapping** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **1-Click Traffic-to-Mock Lab** | ✅ | ❌ | ⚠️ Manual | ✅ | ❌ |
+| **"Connect Anything" Webhook Gateway** | ✅ | ⚠️ Basic | ❌ | ❌ | ❌ |
+| **Local HTTP Traffic Inspector** | ✅ | ⚠️ Basic | ❌ | ❌ | ❌ |
 | **Public WebSocket Tunneling** | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **1-Click & Edit-Replay** | ✅ | ❌ | ✅ | ⚠️ Partial | ❌ |
+| **1-Click & Edit-Replay** | ✅ | ❌ | ✅ | ❌ | ❌ |
 | **Multi-Service Microservice Routing** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Header & JSON Body Mutation** | ✅ | ❌ | ❌ | ⚠️ Scripted | ❌ |
+| **Header & JSON Body Mutation** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Network Chaos Simulation** | ✅ | ❌ | ❌ | ❌ | ✅ |
 | **Shadow Traffic & JSON Differ** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Webhook Lab & Provider Signatures** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Single Standalone Binary (Go)** | ✅ | ✅ | ❌ (Heavy GUI) | ❌ | ✅ |
 
 ---
