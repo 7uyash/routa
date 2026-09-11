@@ -1,5 +1,5 @@
 /* ============================================================
-   Routa Dashboard — Light Design System
+   Routa Dashboard ï¿½ Light Design System
    ============================================================ */
 
 :root {
@@ -466,8 +466,8 @@ body {
 /* ============================================================
    Modal
    ============================================================ */
-#modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fadeIn var(--transition-fast); }
-#modal-overlay.hidden { display: none; }
+#modal-overlay, .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fadeIn var(--transition-fast); }
+#modal-overlay.hidden, .modal-overlay.hidden { display: none; }
 .modal { width: 560px; max-height: 80vh; background: var(--bg-elevated); border-radius: var(--radius-xl); border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; animation: slideUp var(--transition-normal); }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }

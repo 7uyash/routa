@@ -377,9 +377,157 @@
                     <textarea id="edit-body" rows="8" placeholder="Request body..."></textarea>
                 </div>
             </div>
+    <!-- Mock Lab Modal -->
+    <div id="mock-modal-overlay" class="modal-overlay hidden">
+        <div id="mock-modal" class="modal">
+            <div class="modal-header">
+                <h3>Create Mock Endpoint</h3>
+                <button id="mock-modal-close" class="btn-icon">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label>Mock Name</label>
+                    <input type="text" id="mock-name" placeholder="e.g. User Profile Mock">
+                </div>
+                <div class="form-row" style="display:flex;gap:12px">
+                    <div style="flex:1">
+                        <label>HTTP Method</label>
+                        <select id="mock-method">
+                            <option>GET</option><option>POST</option><option>PUT</option>
+                            <option>PATCH</option><option>DELETE</option><option>*</option>
+                        </select>
+                    </div>
+                    <div style="flex:2">
+                        <label>Path Pattern</label>
+                        <input type="text" id="mock-path" placeholder="/api/v1/user">
+                    </div>
+                </div>
+                <div class="form-row" style="display:flex;gap:12px">
+                    <div style="flex:1">
+                        <label>HTTP Status Code</label>
+                        <input type="number" id="mock-status" value="200">
+                    </div>
+                    <div style="flex:1">
+                        <label>Delay (ms)</label>
+                        <input type="number" id="mock-delay" value="0" placeholder="0">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>Response Body (JSON/Text)</label>
+                    <textarea id="mock-body" rows="6" placeholder='{"status":"ok","mocked":true}'></textarea>
+                </div>
+            </div>
             <div class="modal-footer">
-                <button id="btn-modal-cancel" class="btn btn-ghost">Cancel</button>
-                <button id="btn-modal-send" class="btn btn-primary">Send Request</button>
+                <button id="btn-mock-cancel" class="btn btn-ghost">Cancel</button>
+                <button id="btn-mock-save" class="btn btn-primary">Create Mock</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Route Modal -->
+    <div id="route-modal-overlay" class="modal-overlay hidden">
+        <div id="route-modal" class="modal">
+            <div class="modal-header">
+                <h3>Add Traffic Route</h3>
+                <button id="route-modal-close" class="btn-icon">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label>Route Name (Optional)</label>
+                    <input type="text" id="route-name" placeholder="e.g. Auth Service">
+                </div>
+                <div class="form-row">
+                    <label>URL Pattern</label>
+                    <input type="text" id="route-pattern" placeholder="/api/v1/auth/*">
+                </div>
+                <div class="form-row">
+                    <label>Target URL</label>
+                    <input type="text" id="route-target" placeholder="http://localhost:3001">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-route-cancel" class="btn btn-ghost">Cancel</button>
+                <button id="btn-route-save" class="btn btn-primary">Add Route</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mutation Modal -->
+    <div id="mutation-modal-overlay" class="modal-overlay hidden">
+        <div id="mutation-modal" class="modal">
+            <div class="modal-header">
+                <h3>Add Traffic Mutation Rule</h3>
+                <button id="mutation-modal-close" class="btn-icon">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label>Rule Name</label>
+                    <input type="text" id="mut-name" placeholder="e.g. Inject Bearer Token">
+                </div>
+                <div class="form-row" style="display:flex;gap:12px">
+                    <div style="flex:1">
+                        <label>Match Method</label>
+                        <select id="mut-method">
+                            <option value="">ANY (*)</option>
+                            <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
+                        </select>
+                    </div>
+                    <div style="flex:2">
+                        <label>Match Path Pattern</label>
+                        <input type="text" id="mut-path" placeholder="/api/*">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>Set Request Header (Key: Value)</label>
+                    <input type="text" id="mut-header-set" placeholder="Authorization: Bearer token123">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-mut-cancel" class="btn btn-ghost">Cancel</button>
+                <button id="btn-mut-save" class="btn btn-primary">Add Rule</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simulator Modal -->
+    <div id="sim-modal-overlay" class="modal-overlay hidden">
+        <div id="sim-modal" class="modal">
+            <div class="modal-header">
+                <h3>Add Network Simulation Rule</h3>
+                <button id="sim-modal-close" class="btn-icon">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label>Rule Name</label>
+                    <input type="text" id="sim-name" placeholder="e.g. Slow Database Responses">
+                </div>
+                <div class="form-row" style="display:flex;gap:12px">
+                    <div style="flex:1">
+                        <label>Match Method</label>
+                        <select id="sim-method">
+                            <option value="">ANY (*)</option>
+                            <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
+                        </select>
+                    </div>
+                    <div style="flex:2">
+                        <label>Match Path Pattern</label>
+                        <input type="text" id="sim-path" placeholder="/api/v1/db/*">
+                    </div>
+                </div>
+                <div class="form-row" style="display:flex;gap:12px">
+                    <div style="flex:1">
+                        <label>Injected Delay (ms)</label>
+                        <input type="number" id="sim-delay" value="500" placeholder="0">
+                    </div>
+                    <div style="flex:1">
+                        <label>Injected HTTP Error</label>
+                        <input type="number" id="sim-status" value="0" placeholder="0 for none">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-sim-cancel" class="btn btn-ghost">Cancel</button>
+                <button id="btn-sim-save" class="btn btn-primary">Add Rule</button>
             </div>
         </div>
     </div>

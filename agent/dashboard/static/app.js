@@ -751,10 +751,125 @@
         var addRouteBtn = document.getElementById('btn-add-route');
         var addMutBtn   = document.getElementById('btn-add-mutation');
         var addSimBtn   = document.getElementById('btn-add-sim');
-        if (addRouteBtn) addRouteBtn.addEventListener('click', promptAddRoute);
-        if (addMutBtn)   addMutBtn.addEventListener('click', promptAddMutation);
-        if (addSimBtn)   addSimBtn.addEventListener('click', promptAddSim);
+        if (addRouteBtn) addRouteBtn.addEventListener('click', function() { toggleModal('route-modal-overlay', true); });
+        if (addMutBtn)   addMutBtn.addEventListener('click', function() { toggleModal('mutation-modal-overlay', true); });
+        if (addSimBtn)   addSimBtn.addEventListener('click', function() { toggleModal('sim-modal-overlay', true); });
+
+        setupPhase2Modals();
     });
+
+    function toggleModal(overlayId, show) {
+        var overlay = document.getElementById(overlayId);
+        if (overlay) {
+            if (show) overlay.classList.remove('hidden');
+            else overlay.classList.add('hidden');
+        }
+    }
+
+    function setupPhase2Modals() {
+        // Route modal
+        var rc = document.getElementById('route-modal-close');
+        var rcan = document.getElementById('btn-route-cancel');
+        var rs = document.getElementById('btn-route-save');
+        var rOverlay = document.getElementById('route-modal-overlay');
+        if (rc) rc.addEventListener('click', function() { toggleModal('route-modal-overlay', false); });
+        if (rcan) rcan.addEventListener('click', function() { toggleModal('route-modal-overlay', false); });
+        if (rOverlay) rOverlay.addEventListener('click', function(e) { if (e.target === rOverlay) toggleModal('route-modal-overlay', false); });
+        if (rs) {
+            rs.addEventListener('click', async function() {
+                var name = document.getElementById('route-name').value;
+                var pattern = document.getElementById('route-pattern').value || '/api/*';
+                var target = document.getElementById('route-target').value || 'http://localhost:3001';
+                try {
+                    var r = await fetch('/api/routes');
+                    var data = await r.json();
+                    var routes = data.routes || [];
+                    routes.push({ pattern: pattern, target: target, name: name });
+                    await fetch('/api/routes', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({routes: routes})});
+                    toggleModal('route-modal-overlay', false);
+                    fetchRoutes();
+                    showToast2('Route added', 'success');
+                } catch(e) {
+                    showToast2('Error: ' + e.message, 'error');
+                }
+            });
+        }
+
+        // Mutation modal
+        var mc = document.getElementById('mutation-modal-close');
+        var mcan = document.getElementById('btn-mut-cancel');
+        var ms = document.getElementById('btn-mut-save');
+        var mOverlay = document.getElementById('mutation-modal-overlay');
+        if (mc) mc.addEventListener('click', function() { toggleModal('mutation-modal-overlay', false); });
+        if (mcan) mcan.addEventListener('click', function() { toggleModal('mutation-modal-overlay', false); });
+        if (mOverlay) mOverlay.addEventListener('click', function(e) { if (e.target === mOverlay) toggleModal('mutation-modal-overlay', false); });
+        if (ms) {
+            ms.addEventListener('click', async function() {
+                var name = document.getElementById('mut-name').value || 'Rule';
+                var method = document.getElementById('mut-method').value;
+                var path = document.getElementById('mut-path').value;
+                var hdrStr = document.getElementById('mut-header-set').value;
+
+                var rule = { name: name, match: { path: path, method: method }, request: {}, response: {} };
+                if (hdrStr && hdrStr.includes(':')) {
+                    var parts = hdrStr.split(':');
+                    rule.request.set_headers = {};
+                    rule.request.set_headers[parts[0].trim()] = parts.slice(1).join(':').trim();
+                }
+
+                try {
+                    var r = await fetch('/api/mutations');
+                    var data = await r.json();
+                    var muts = data.mutations || [];
+                    muts.push(rule);
+                    await fetch('/api/mutations', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mutations: muts})});
+                    toggleModal('mutation-modal-overlay', false);
+                    fetchMutations();
+                    showToast2('Mutation rule added', 'success');
+                } catch(e) {
+                    showToast2('Error: ' + e.message, 'error');
+                }
+            });
+        }
+
+        // Simulator modal
+        var sc = document.getElementById('sim-modal-close');
+        var scan = document.getElementById('btn-sim-cancel');
+        var ss = document.getElementById('btn-sim-save');
+        var sOverlay = document.getElementById('sim-modal-overlay');
+        if (sc) sc.addEventListener('click', function() { toggleModal('sim-modal-overlay', false); });
+        if (scan) scan.addEventListener('click', function() { toggleModal('sim-modal-overlay', false); });
+        if (sOverlay) sOverlay.addEventListener('click', function(e) { if (e.target === sOverlay) toggleModal('sim-modal-overlay', false); });
+        if (ss) {
+            ss.addEventListener('click', async function() {
+                var name = document.getElementById('sim-name').value || 'Simulation Rule';
+                var method = document.getElementById('sim-method').value;
+                var path = document.getElementById('sim-path').value;
+                var delay = parseInt(document.getElementById('sim-delay').value || '0');
+                var status = parseInt(document.getElementById('sim-status').value || '0');
+
+                var rule = {
+                    name: name,
+                    match: { path: path, method: method },
+                    delay_ms: delay,
+                    injected_status: status
+                };
+
+                try {
+                    var r = await fetch('/api/simulations');
+                    var data = await r.json();
+                    var sims = data.simulations || [];
+                    sims.push(rule);
+                    await fetch('/api/simulations', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({simulations: sims})});
+                    toggleModal('sim-modal-overlay', false);
+                    fetchSimulations();
+                    showToast2('Simulation rule added', 'success');
+                } catch(e) {
+                    showToast2('Error: ' + e.message, 'error');
+                }
+            });
+        }
+    }
 
     // ============================================================
     // Routes
@@ -779,7 +894,7 @@
             return '<div class="rule-card">' +
                 '<div class="rule-info">' +
                   '<div class="rule-name">' + esc(r.name || 'Route ' + (i+1)) + '</div>' +
-                  '<div class="rule-detail">' + esc(r.pattern) + ' ? ' + esc(r.target) + '</div>' +
+                  '<div class="rule-detail">' + esc(r.pattern) + ' &rarr; ' + esc(r.target) + '</div>' +
                 '</div>' +
                 '<div style="display:flex;gap:6px">' +
                   '<button class="btn btn-ghost btn-sm btn-del-route" data-idx="' + i + '">Delete</button>' +
@@ -796,22 +911,6 @@
                 fetchRoutes();
                 showToast2('Route deleted', 'info');
             });
-        });
-    }
-
-    function promptAddRoute() {
-        var pattern = prompt('URL pattern (e.g. /api/* or /health):', '/api/*');
-        if (!pattern) return;
-        var target = prompt('Target URL (e.g. http://localhost:3001):', 'http://localhost:3001');
-        if (!target) return;
-        var name = prompt('Name (optional):', '');
-
-        fetch('/api/routes').then(function(r) { return r.json(); }).then(async function(data) {
-            var routes = data.routes || [];
-            routes.push({ pattern: pattern, target: target, name: name });
-            await fetch('/api/routes', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({routes: routes})});
-            fetchRoutes();
-            showToast2('Route added', 'success');
         });
     }
 
@@ -864,35 +963,6 @@
         });
     }
 
-    function promptAddMutation() {
-        var name = prompt('Rule name:', 'my-mutation');
-        if (!name) return;
-        var matchPath = prompt('Match path prefix (e.g. /api/* or leave blank for all):', '');
-        var method    = prompt('Match method (e.g. POST, or blank for any):', '');
-
-        var headerKey = prompt('Add request header key (or blank to skip):', '');
-        var rule = { name: name, match: { path: matchPath, method: method }, request: {}, response: {} };
-        if (headerKey) {
-            var headerVal = prompt('Value for ' + headerKey + ':', '');
-            rule.request.set_headers = {};
-            rule.request.set_headers[headerKey] = headerVal;
-        }
-
-        var mockStatus = prompt('Mock response status (e.g. 200, or blank to skip):', '');
-        if (mockStatus) {
-            rule.response.mock_status = parseInt(mockStatus);
-            rule.response.mock_body = prompt('Mock body JSON:', '{"mocked":true}');
-        }
-
-        fetch('/api/mutations').then(function(r) { return r.json(); }).then(async function(data) {
-            var muts = data.mutations || [];
-            muts.push(rule);
-            await fetch('/api/mutations', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mutations: muts})});
-            fetchMutations();
-            showToast2('Mutation added', 'success');
-        });
-    }
-
     // ============================================================
     // Simulator
     // ============================================================
@@ -940,36 +1010,6 @@
                 fetchSimulations();
                 showToast2('Simulation deleted', 'info');
             });
-        });
-    }
-
-    function promptAddSim() {
-        var name = prompt('Rule name:', 'latency-test');
-        if (!name) return;
-        var matchPath = prompt('Match path prefix (blank for all):', '');
-        var method    = prompt('Match method (blank for any):', '');
-        var delayMs   = parseInt(prompt('Delay (ms, 0 to skip):', '500') || '0');
-        var jitterMs  = parseInt(prompt('Jitter ±ms (0 to skip):', '100') || '0');
-        var errorRate = parseFloat(prompt('Error rate 0.0-1.0 (0 to skip):', '0') || '0');
-        var errorSts  = parseInt(prompt('Error status code:', '503') || '503');
-        var dropStr   = prompt('Drop connection? (yes/no):', 'no');
-
-        var rule = {
-            name: name,
-            match: { path: matchPath, method: method },
-            delay_ms: delayMs,
-            jitter_ms: jitterMs,
-            error_rate: errorRate,
-            error_status: errorSts,
-            drop: dropStr === 'yes'
-        };
-
-        fetch('/api/simulations').then(function(r) { return r.json(); }).then(async function(data) {
-            var sims = data.simulations || [];
-            sims.push(rule);
-            await fetch('/api/simulations', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({simulations: sims})});
-            fetchSimulations();
-            showToast2('Simulation added', 'success');
         });
     }
 
@@ -1109,7 +1149,8 @@
         if (refreshMapBtn) refreshMapBtn.addEventListener('click', fetchAPIMap);
 
         var addMockBtn = document.getElementById('btn-add-mock');
-        if (addMockBtn) addMockBtn.addEventListener('click', promptAddMock);
+        if (addMockBtn) addMockBtn.addEventListener('click', openMockModal);
+        setupMockModal();
 
         var createMockFromReqBtn = document.getElementById('btn-create-mock-from-req');
         if (createMockFromReqBtn) {
@@ -1346,32 +1387,65 @@
         });
     }
 
-    function promptAddMock() {
-        var name = prompt('Mock name:', 'mock-user-profile');
-        if (!name) return;
-        var path = prompt('Path to mock (e.g. /api/v1/profile):', '/api/v1/mock');
-        if (!path) return;
-        var method = prompt('HTTP Method (GET, POST, etc.):', 'GET') || 'GET';
-        var status = parseInt(prompt('Response HTTP status code:', '200') || '200');
-        var body = prompt('Response JSON body:', '{"status":"ok","mocked":true}');
-        var delay = parseInt(prompt('Simulated delay in ms (0 for none):', '0') || '0');
+    function openMockModal() {
+        var overlay = document.getElementById('mock-modal-overlay');
+        if (overlay) overlay.classList.remove('hidden');
+    }
 
-        fetch('/api/mocks', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name: name,
-                path: path,
-                method: method,
-                status: status,
-                body: body,
-                delay_ms: delay,
-                active: true
-            })
-        }).then(function(r) { return r.json(); }).then(function() {
-            fetchMocks();
-            showToast3('Mock endpoint created!', 'success');
-        });
+    function closeMockModal() {
+        var overlay = document.getElementById('mock-modal-overlay');
+        if (overlay) overlay.classList.add('hidden');
+    }
+
+    function setupMockModal() {
+        var closeBtn = document.getElementById('mock-modal-close');
+        var cancelBtn = document.getElementById('btn-mock-cancel');
+        var overlay = document.getElementById('mock-modal-overlay');
+        var saveBtn = document.getElementById('btn-mock-save');
+
+        if (closeBtn) closeBtn.addEventListener('click', closeMockModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeMockModal);
+        if (overlay) {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) closeMockModal();
+            });
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async function() {
+                var name = (document.getElementById('mock-name') || {}).value || 'Mock Endpoint';
+                var method = (document.getElementById('mock-method') || {}).value || 'GET';
+                var path = (document.getElementById('mock-path') || {}).value || '/api/v1/mock';
+                var status = parseInt((document.getElementById('mock-status') || {}).value || '200');
+                var delay = parseInt((document.getElementById('mock-delay') || {}).value || '0');
+                var body = (document.getElementById('mock-body') || {}).value || '{"status":"ok","mocked":true}';
+
+                try {
+                    var resp = await fetch('/api/mocks', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: name,
+                            path: path,
+                            method: method,
+                            status: status,
+                            body: body,
+                            delay_ms: delay,
+                            active: true
+                        })
+                    });
+                    if (resp.ok) {
+                        closeMockModal();
+                        fetchMocks();
+                        showToast3('Mock endpoint created!', 'success');
+                    } else {
+                        showToast3('Failed to create mock', 'error');
+                    }
+                } catch (e) {
+                    showToast3('Error: ' + e.message, 'error');
+                }
+            });
+        }
     }
 
     // Helpers
