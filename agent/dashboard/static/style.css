@@ -103,7 +103,7 @@ body {
 
 .logo { display: flex; align-items: center; gap: 8px; }
 
-.logo-img { height: 28px; width: auto; display: block; }
+.logo-img { height: 34px; width: auto; display: block; object-fit: contain; }
 
 .status-indicator {
     display: flex;
