@@ -36,7 +36,8 @@
                 $$('.nav-tab').forEach(t => t.classList.remove('active'));
                 $$('.tab-content').forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
-                $(`#tab-${tab.dataset.tab}`).classList.add('active');
+                const target = $(`#tab-${tab.dataset.tab}`);
+                if (target) target.classList.add('active');
 
                 // Load data for the tab
                 if (tab.dataset.tab === 'webhooks') fetchWebhooks();
@@ -50,19 +51,28 @@
     // ============================================================
     function initFilters() {
         let debounceTimer;
-        $('#filter-search').addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(fetchRequests, 300);
-        });
-        $('#filter-method').addEventListener('change', fetchRequests);
-        $('#filter-status').addEventListener('change', fetchRequests);
+        const searchInput = $('#filter-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(fetchRequests, 300);
+            });
+        }
+        const methodSelect = $('#filter-method');
+        if (methodSelect) methodSelect.addEventListener('change', fetchRequests);
+        const statusSelect = $('#filter-status');
+        if (statusSelect) statusSelect.addEventListener('change', fetchRequests);
     }
 
     function getFilterParams() {
         const params = new URLSearchParams();
-        const search = $('#filter-search').value;
-        const method = $('#filter-method').value;
-        const status = $('#filter-status').value;
+        const searchInput = $('#filter-search');
+        const methodSelect = $('#filter-method');
+        const statusSelect = $('#filter-status');
+
+        const search = searchInput ? searchInput.value : '';
+        const method = methodSelect ? methodSelect.value : '';
+        const status = statusSelect ? statusSelect.value : '';
 
         if (search) params.set('search', search);
         if (method) params.set('method', method);
@@ -84,7 +94,8 @@
                 $$('.detail-tab').forEach(t => t.classList.remove('active'));
                 $$('.detail-section').forEach(s => s.classList.remove('active'));
                 tab.classList.add('active');
-                $(`#detail-${tab.dataset.detail}`).classList.add('active');
+                const target = $(`#detail-${tab.dataset.detail}`);
+                if (target) target.classList.add('active');
             });
         });
     }
@@ -94,119 +105,150 @@
     // ============================================================
     function initButtons() {
         // Clear requests
-        $('#btn-clear').addEventListener('click', async () => {
-            await fetch('/api/requests', { method: 'DELETE' });
-            fetchRequests();
-            $('#detail-panel').classList.add('hidden');
-            selectedEntryId = null;
-            showToast('Requests cleared', 'info');
-        });
+        const btnClear = $('#btn-clear');
+        if (btnClear) {
+            btnClear.addEventListener('click', async () => {
+                await fetch('/api/requests', { method: 'DELETE' });
+                fetchRequests();
+                const detailPanel = $('#detail-panel');
+                if (detailPanel) detailPanel.classList.add('hidden');
+                selectedEntryId = null;
+                showToast('Requests cleared', 'info');
+            });
+        }
 
         // Replay
-        $('#btn-replay').addEventListener('click', async () => {
-            if (!selectedEntryId) return;
-            try {
-                const resp = await fetch(`/api/requests/${selectedEntryId}/replay`, { method: 'POST' });
-                if (resp.ok) {
-                    showToast('Request replayed', 'success');
-                } else {
-                    showToast('Replay failed', 'error');
+        const btnReplay = $('#btn-replay');
+        if (btnReplay) {
+            btnReplay.addEventListener('click', async () => {
+                if (!selectedEntryId) return;
+                try {
+                    const resp = await fetch(`/api/requests/${selectedEntryId}/replay`, { method: 'POST' });
+                    if (resp.ok) {
+                        showToast('Request replayed', 'success');
+                    } else {
+                        showToast('Replay failed', 'error');
+                    }
+                } catch (e) {
+                    showToast('Replay error: ' + e.message, 'error');
                 }
-            } catch (e) {
-                showToast('Replay error: ' + e.message, 'error');
-            }
-        });
+            });
+        }
 
         // Edit & Replay
-        $('#btn-edit-replay').addEventListener('click', () => {
-            if (!selectedEntryId) return;
-            openEditModal(selectedEntryId);
-        });
+        const btnEditReplay = $('#btn-edit-replay');
+        if (btnEditReplay) {
+            btnEditReplay.addEventListener('click', () => {
+                if (!selectedEntryId) return;
+                openEditModal(selectedEntryId);
+            });
+        }
 
         // Copy public URL
-        $('#public-url').addEventListener('click', () => {
-            const url = $('#public-url-text').textContent;
-            if (url && url !== 'â€”') {
-                navigator.clipboard.writeText(url).then(() => {
-                    showToast('URL copied to clipboard', 'success');
-                });
-            }
-        });
+        const publicUrl = $('#public-url');
+        if (publicUrl) {
+            publicUrl.addEventListener('click', () => {
+                const urlEl = $('#public-url-text');
+                const url = urlEl ? urlEl.textContent : '';
+                if (url && url !== '—' && url !== '-') {
+                    navigator.clipboard.writeText(url).then(() => {
+                        showToast('URL copied to clipboard', 'success');
+                    });
+                }
+            });
+        }
 
         // Create webhook
-        $('#btn-create-webhook').addEventListener('click', async () => {
-            const name = prompt('Webhook endpoint name:', 'my-webhook');
-            if (!name) return;
-            await fetch('/api/webhooks', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name })
+        const btnCreateWebhook = $('#btn-create-webhook');
+        if (btnCreateWebhook) {
+            btnCreateWebhook.addEventListener('click', async () => {
+                const name = prompt('Webhook endpoint name:', 'my-webhook');
+                if (!name) return;
+                await fetch('/api/webhooks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                fetchWebhooks();
+                showToast('Webhook endpoint created', 'success');
             });
-            fetchWebhooks();
-            showToast('Webhook endpoint created', 'success');
-        });
+        }
 
         // Save session
-        $('#btn-save-session').addEventListener('click', async () => {
-            const name = prompt('Session name:', `session-${Date.now()}`);
-            if (!name) return;
-            const resp = await fetch('/api/sessions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name })
+        const btnSaveSession = $('#btn-save-session');
+        if (btnSaveSession) {
+            btnSaveSession.addEventListener('click', async () => {
+                const name = prompt('Session name:', `session-${Date.now()}`);
+                if (!name) return;
+                const resp = await fetch('/api/sessions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                if (resp.ok) {
+                    fetchSessions();
+                    showToast('Session saved', 'success');
+                }
             });
-            if (resp.ok) {
-                fetchSessions();
-                showToast('Session saved', 'success');
-            }
-        });
+        }
     }
 
     // ============================================================
     // Modal
     // ============================================================
     function initModal() {
-        $('#modal-close').addEventListener('click', closeModal);
-        $('#btn-modal-cancel').addEventListener('click', closeModal);
-        $('#modal-overlay').addEventListener('click', (e) => {
-            if (e.target === $('#modal-overlay')) closeModal();
-        });
+        const btnClose = $('#modal-close');
+        if (btnClose) btnClose.addEventListener('click', closeModal);
 
-        $('#btn-modal-send').addEventListener('click', async () => {
-            const req = {
-                original_id: $('#edit-replay-modal').dataset.originalId || '',
-                method: $('#edit-method').value,
-                path: $('#edit-path').value,
-                query: $('#edit-query').value,
-                headers: {},
-                body: btoa($('#edit-body').value || '')
-            };
+        const btnCancel = $('#btn-modal-cancel');
+        if (btnCancel) btnCancel.addEventListener('click', closeModal);
 
-            try {
-                req.headers = JSON.parse($('#edit-headers').value || '{}');
-            } catch (e) {
-                showToast('Invalid headers JSON', 'error');
-                return;
-            }
+        const overlay = $('#modal-overlay');
+        if (overlay) {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) closeModal();
+            });
+        }
 
-            // Convert body to base64 bytes
-            const bodyStr = $('#edit-body').value || '';
-            req.body = Array.from(new TextEncoder().encode(bodyStr));
+        const btnSend = $('#btn-modal-send');
+        if (btnSend) {
+            btnSend.addEventListener('click', async () => {
+                const modal = $('#edit-replay-modal');
+                const req = {
+                    original_id: modal ? (modal.dataset.originalId || '') : '',
+                    method: $('#edit-method') ? $('#edit-method').value : 'GET',
+                    path: $('#edit-path') ? $('#edit-path').value : '/',
+                    query: $('#edit-query') ? $('#edit-query').value : '',
+                    headers: {},
+                    body: ''
+                };
 
-            try {
-                const resp = await fetch('/api/replay', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(req)
-                });
-                if (resp.ok) {
-                    closeModal();
-                    showToast('Request sent', 'success');
+                try {
+                    const headersStr = $('#edit-headers') ? $('#edit-headers').value : '{}';
+                    req.headers = JSON.parse(headersStr || '{}');
+                } catch (e) {
+                    showToast('Invalid headers JSON', 'error');
+                    return;
                 }
-            } catch (e) {
-                showToast('Send failed: ' + e.message, 'error');
-            }
-        });
+
+                const bodyStr = $('#edit-body') ? $('#edit-body').value || '' : '';
+                req.body = Array.from(new TextEncoder().encode(bodyStr));
+
+                try {
+                    const resp = await fetch('/api/replay', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(req)
+                    });
+                    if (resp.ok) {
+                        closeModal();
+                        showToast('Request sent', 'success');
+                    }
+                } catch (e) {
+                    showToast('Send failed: ' + e.message, 'error');
+                }
+            });
+        }
     }
 
     async function openEditModal(entryId) {

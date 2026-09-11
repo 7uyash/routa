@@ -257,6 +257,27 @@
             </div>
         </div>
 
+        <!-- Connect Webhooks Panel -->
+        <div id="tab-webhooks" class="tab-content">
+            <div class="panel-header">
+                <div>
+                    <h2>Connect Webhooks</h2>
+                    <p class="panel-desc">Create public endpoints to receive webhooks from Stripe, GitHub, and third-party services</p>
+                </div>
+                <button id="btn-create-webhook" class="btn btn-primary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Create Webhook Endpoint
+                </button>
+            </div>
+            <div id="webhook-list" class="empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+                <p>No webhook endpoints yet</p>
+                <p class="empty-sub">Create an endpoint to start receiving webhooks</p>
+            </div>
+        </div>
+
         <!-- Sessions Panel -->
         <div id="tab-sessions" class="tab-content">
             <div class="session-header">
