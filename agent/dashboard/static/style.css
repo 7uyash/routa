@@ -564,3 +564,4 @@ body {
     .discovery-grid { grid-template-columns: 1fr; }
     .discovery-card-section { border-right: none; border-bottom: 1px solid var(--border); }
 }
+.status-dot.local { background: var(--text-tertiary); animation: none; }

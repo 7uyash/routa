@@ -337,7 +337,10 @@
                 label.textContent = 'Connected';
             } else if (data.state === 'connecting') {
                 dot.className = 'status-dot';
-                label.textContent = 'Connectingâ€¦';
+                label.textContent = 'Connecting\u2026';
+            } else if (data.state === 'no_relay') {
+                dot.className = 'status-dot local';
+                label.textContent = 'Local Only';
             } else {
                 dot.className = 'status-dot disconnected';
                 label.textContent = 'Disconnected';

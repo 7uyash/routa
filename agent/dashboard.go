@@ -284,8 +284,12 @@ func (ds *DashboardServer) handleTunnelStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 	stats := ds.tunnel.Stats()
+	state := stats.State.String()
+	if ds.cfg.RelayURL == "" {
+		state = "no_relay"
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"state":           stats.State.String(),
+		"state":           state,
 		"public_url":      stats.PublicURL,
 		"subdomain":       stats.Subdomain,
 		"request_count":   stats.RequestCount,
