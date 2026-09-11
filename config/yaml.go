@@ -49,68 +49,66 @@ type RouteConfig struct {
 
 // MutationConfig describes a traffic mutation rule.
 type MutationConfig struct {
-	Name     string           `yaml:"name"`
-	Match    MatchConfig      `yaml:"match"`
-	Request  RequestMutation  `yaml:"request"`
-	Response ResponseMutation `yaml:"response"`
+	Name     string           `yaml:"name" json:"name"`
+	Match    MatchConfig      `yaml:"match" json:"match"`
+	Request  RequestMutation  `yaml:"request" json:"request"`
+	Response ResponseMutation `yaml:"response" json:"response"`
 }
 
 // MatchConfig defines conditions for when a rule applies.
 type MatchConfig struct {
 	// Path prefix or glob. Empty = match all.
-	Path   string `yaml:"path"`
-	Method string `yaml:"method"`
+	Path   string `yaml:"path" json:"path"`
+	Method string `yaml:"method" json:"method"`
 }
 
 // RequestMutation describes mutations to the outgoing request.
 type RequestMutation struct {
 	// Add/override headers. Key→Value.
-	SetHeaders    map[string]string `yaml:"set_headers"`
-	RemoveHeaders []string          `yaml:"remove_headers"`
+	SetHeaders    map[string]string `yaml:"set_headers" json:"set_headers,omitempty"`
+	RemoveHeaders []string          `yaml:"remove_headers" json:"remove_headers,omitempty"`
 	// Rewrite the path: strip prefix, or regex-replace.
-	StripPathPrefix string `yaml:"strip_path_prefix"`
-	ReplacePath     string `yaml:"replace_path"` // literal new path
+	StripPathPrefix string `yaml:"strip_path_prefix" json:"strip_path_prefix,omitempty"`
+	ReplacePath     string `yaml:"replace_path" json:"replace_path,omitempty"` // literal new path
 	// Set/override query parameters.
-	SetQuery    map[string]string `yaml:"set_query"`
-	RemoveQuery []string          `yaml:"remove_query"`
+	SetQuery    map[string]string `yaml:"set_query" json:"set_query,omitempty"`
+	RemoveQuery []string          `yaml:"remove_query" json:"remove_query,omitempty"`
 	// JSON body field mutations: dot-notation path → new value (as JSON string).
-	SetBodyFields map[string]string `yaml:"set_body_fields"`
+	SetBodyFields map[string]string `yaml:"set_body_fields" json:"set_body_fields,omitempty"`
 }
 
 // ResponseMutation describes mutations to the incoming response.
 type ResponseMutation struct {
 	// Add/override response headers.
-	SetHeaders    map[string]string `yaml:"set_headers"`
-	RemoveHeaders []string          `yaml:"remove_headers"`
+	SetHeaders    map[string]string `yaml:"set_headers" json:"set_headers,omitempty"`
+	RemoveHeaders []string          `yaml:"remove_headers" json:"remove_headers,omitempty"`
 	// Override the status code.
-	ForceStatus int `yaml:"force_status"`
+	ForceStatus int `yaml:"force_status" json:"force_status,omitempty"`
 	// Return a mock response instead of forwarding at all.
-	MockStatus  int               `yaml:"mock_status"`
-	MockBody    string            `yaml:"mock_body"`
-	MockHeaders map[string]string `yaml:"mock_headers"`
+	MockStatus  int               `yaml:"mock_status" json:"mock_status,omitempty"`
+	MockBody    string            `yaml:"mock_body" json:"mock_body,omitempty"`
+	MockHeaders map[string]string `yaml:"mock_headers" json:"mock_headers,omitempty"`
 }
 
 // SimulationConfig describes network/failure simulation for a route.
 type SimulationConfig struct {
-	Name  string      `yaml:"name"`
-	Match MatchConfig `yaml:"match"`
+	Name  string      `yaml:"name" json:"name"`
+	Match MatchConfig `yaml:"match" json:"match"`
 
 	// Latency injection (milliseconds).
-	DelayMs  int `yaml:"delay_ms"`
-	JitterMs int `yaml:"jitter_ms"` // random ±jitter added on top of delay
+	DelayMs  int `yaml:"delay_ms" json:"delay_ms,omitempty"`
+	JitterMs int `yaml:"jitter_ms" json:"jitter_ms,omitempty"` // random ±jitter added on top of delay
 
 	// Bandwidth throttle in bytes/second. 0 = unlimited.
-	BandwidthBps int `yaml:"bandwidth_bps"`
+	BandwidthBps int `yaml:"bandwidth_bps" json:"bandwidth_bps,omitempty"`
 
 	// Error injection: return this HTTP status at the given rate (0.0–1.0).
-	ErrorRate   float64 `yaml:"error_rate"`
-	ErrorStatus int     `yaml:"error_status"` // default 503
+	ErrorRate   float64 `yaml:"error_rate" json:"error_rate,omitempty"`
+	ErrorStatus int     `yaml:"error_status" json:"error_status,omitempty"` // default 503
 
 	// Timeout: kill the forwarded connection after this many ms.
-	TimeoutMs int `yaml:"timeout_ms"`
-
-	// Drop: don't send any response (simulate connection drop).
-	Drop bool `yaml:"drop"`
+	TimeoutMs int `yaml:"timeout_ms" json:"timeout_ms,omitempty"`
+	Drop      bool `yaml:"drop" json:"drop,omitempty"`
 }
 
 // ShadowConfig names additional targets to mirror traffic to.
