@@ -31,6 +31,13 @@ import (
 //go:embed dashboard/static
 var staticFiles embed.FS
 
+// wsClient wraps a websocket connection with a dedicated send channel
+// so that broadcastEntry never writes from multiple goroutines concurrently.
+type wsClient struct {
+	conn   *websocket.Conn
+	sendCh chan []byte
+}
+
 // DashboardServer serves the web inspector dashboard and REST API.
 type DashboardServer struct {
 	port     int
@@ -47,9 +54,9 @@ type DashboardServer struct {
 	upgrader websocket.Upgrader
 	agent    *Agent // back-pointer for hot-reloading routes/mutations
 
-	// WebSocket clients for live updates.
-	wsMu    sync.RWMutex
-	wsConns map[*websocket.Conn]bool
+	// WebSocket clients: keyed by send channel for safe concurrent broadcast.
+	wsMu      sync.RWMutex
+	wsClients map[chan []byte]*wsClient
 }
 
 // NewDashboardServer creates a dashboard server.
@@ -71,7 +78,7 @@ func NewDashboardServer(port int, rec *recorder.Recorder, rep *replay.Engine,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
-		wsConns: make(map[*websocket.Conn]bool),
+		wsClients: make(map[chan []byte]*wsClient),
 	}
 
 	// Register live update callback on the recorder.
@@ -474,24 +481,43 @@ func (ds *DashboardServer) handleWebSocket(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Each client gets a buffered send channel and a dedicated writer goroutine,
+	// ensuring conn.WriteMessage is only ever called from one goroutine.
+	sendCh := make(chan []byte, 64)
+	client := &wsClient{conn: conn, sendCh: sendCh}
+
 	ds.wsMu.Lock()
-	ds.wsConns[conn] = true
+	ds.wsClients[sendCh] = client
 	ds.wsMu.Unlock()
 
-	// Keep reading to detect disconnect.
+	// Dedicated writer goroutine — sole writer for this connection.
+	go func() {
+		for msg := range sendCh {
+			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				conn.Close()
+				return
+			}
+		}
+	}()
+
+	// Read loop — only used to detect client disconnect.
 	for {
 		if _, _, err := conn.ReadMessage(); err != nil {
 			break
 		}
 	}
 
+	// Cleanup: remove client and close the send channel to stop writer goroutine.
 	ds.wsMu.Lock()
-	delete(ds.wsConns, conn)
+	delete(ds.wsClients, sendCh)
 	ds.wsMu.Unlock()
+	close(sendCh)
 	conn.Close()
 }
 
 // broadcastEntry pushes a new entry to all connected WebSocket clients.
+// Safe to call from multiple goroutines concurrently — writes go through
+// per-client channels, never directly to the websocket connection.
 func (ds *DashboardServer) broadcastEntry(entry *recorder.Entry) {
 	data, err := json.Marshal(map[string]any{
 		"type":  "new_request",
@@ -504,14 +530,12 @@ func (ds *DashboardServer) broadcastEntry(entry *recorder.Entry) {
 	ds.wsMu.RLock()
 	defer ds.wsMu.RUnlock()
 
-	for conn := range ds.wsConns {
-		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-			conn.Close()
-			go func(c *websocket.Conn) {
-				ds.wsMu.Lock()
-				delete(ds.wsConns, c)
-				ds.wsMu.Unlock()
-			}(conn)
+	for sendCh := range ds.wsClients {
+		// Non-blocking send: drop the message if the client's buffer is full
+		// rather than blocking the recording pipeline.
+		select {
+		case sendCh <- data:
+		default:
 		}
 	}
 }
