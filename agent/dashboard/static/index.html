@@ -261,8 +261,8 @@
         <div id="tab-webhooks" class="tab-content">
             <div class="panel-header">
                 <div>
-                    <h2>Connect Webhooks</h2>
-                    <p class="panel-desc">Create public endpoints to receive webhooks from Stripe, GitHub, and third-party services</p>
+                    <h2>Connect Anything — Webhook Lab</h2>
+                    <p class="panel-desc">Create public webhook endpoints for Stripe, GitHub, Shopify or custom providers with signature checks, toggles and test deliveries</p>
                 </div>
                 <button id="btn-create-webhook" class="btn btn-primary">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -528,6 +528,46 @@
             <div class="modal-footer">
                 <button id="btn-sim-cancel" class="btn btn-ghost">Cancel</button>
                 <button id="btn-sim-save" class="btn btn-primary">Add Rule</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Webhook Modal -->
+    <div id="webhook-modal-overlay" class="modal-overlay hidden">
+        <div id="webhook-modal" class="modal">
+            <div class="modal-header">
+                <h3>Create Webhook Endpoint</h3>
+                <button id="webhook-modal-close" class="btn-icon">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label>Endpoint Name</label>
+                    <input type="text" id="wh-name" placeholder="e.g. Stripe Payment Webhook">
+                </div>
+                <div class="form-row" style="display:flex;gap:12px">
+                    <div style="flex:1">
+                        <label>Provider</label>
+                        <select id="wh-provider">
+                            <option value="Stripe">Stripe</option>
+                            <option value="GitHub">GitHub</option>
+                            <option value="Shopify">Shopify</option>
+                            <option value="Discord">Discord</option>
+                            <option value="Twilio">Twilio</option>
+                            <option value="Slack">Slack</option>
+                            <option value="SendGrid">SendGrid</option>
+                            <option value="PayPal">PayPal</option>
+                            <option value="Custom" selected>Custom</option>
+                        </select>
+                    </div>
+                    <div style="flex:1">
+                        <label>Signature Secret (Optional)</label>
+                        <input type="text" id="wh-secret" placeholder="whsec_... or secret">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-wh-cancel" class="btn btn-ghost">Cancel</button>
+                <button id="btn-wh-save" class="btn btn-primary">Create Endpoint</button>
             </div>
         </div>
     </div>

@@ -158,19 +158,41 @@
             });
         }
 
-        // Create webhook
+        // Create webhook modal setup
         const btnCreateWebhook = $('#btn-create-webhook');
         if (btnCreateWebhook) {
-            btnCreateWebhook.addEventListener('click', async () => {
-                const name = prompt('Webhook endpoint name:', 'my-webhook');
-                if (!name) return;
-                await fetch('/api/webhooks', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name })
-                });
-                fetchWebhooks();
-                showToast('Webhook endpoint created', 'success');
+            btnCreateWebhook.addEventListener('click', () => {
+                const overlay = $('#webhook-modal-overlay');
+                if (overlay) overlay.classList.remove('hidden');
+            });
+        }
+
+        const whClose = $('#webhook-modal-close');
+        const whCancel = $('#btn-wh-cancel');
+        const whOverlay = $('#webhook-modal-overlay');
+        const whSave = $('#btn-wh-save');
+        if (whClose) whClose.addEventListener('click', () => whOverlay && whOverlay.classList.add('hidden'));
+        if (whCancel) whCancel.addEventListener('click', () => whOverlay && whOverlay.classList.add('hidden'));
+        if (whOverlay) whOverlay.addEventListener('click', (e) => { if (e.target === whOverlay) whOverlay.classList.add('hidden'); });
+        if (whSave) {
+            whSave.addEventListener('click', async () => {
+                const name = ($('#wh-name') || {}).value || 'Webhook Endpoint';
+                const provider = ($('#wh-provider') || {}).value || 'Custom';
+                const secret = ($('#wh-secret') || {}).value || '';
+                try {
+                    const resp = await fetch('/api/webhooks', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, provider, secret })
+                    });
+                    if (resp.ok) {
+                        if (whOverlay) whOverlay.classList.add('hidden');
+                        fetchWebhooks();
+                        showToast('Webhook endpoint created!', 'success');
+                    }
+                } catch(e) {
+                    showToast('Error: ' + e.message, 'error');
+                }
             });
         }
 
@@ -581,11 +603,17 @@
         container.innerHTML = endpoints.map(ep => `
             <div class="webhook-card" data-id="${ep.id}">
                 <div class="webhook-info">
-                    <div class="webhook-name">${escapeHtml(ep.name)}</div>
-                    <div class="webhook-path">${escapeHtml(ep.path)}</div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <div class="webhook-name">${escapeHtml(ep.name)}</div>
+                        <span class="rule-tag" style="background:rgba(79,70,229,0.1);color:#4f46e5;font-weight:600">${escapeHtml(ep.provider || 'Custom')}</span>
+                        <span class="status-dot ${ep.active !== false ? 'connected' : 'disconnected'}" title="${ep.active !== false ? 'Active' : 'Disabled'}"></span>
+                    </div>
+                    <div class="webhook-path"><code>${escapeHtml(ep.path)}</code></div>
                     <div class="webhook-meta">Created ${new Date(ep.created_at).toLocaleString()}</div>
                 </div>
-                <div style="display:flex;gap:6px">
+                <div style="display:flex;gap:6px;align-items:center">
+                    <button class="btn btn-secondary btn-sm btn-test-webhook" data-id="${ep.id}" title="Send simulated test delivery payload">Test Delivery</button>
+                    <button class="btn btn-outline btn-sm btn-toggle-webhook" data-id="${ep.id}">${ep.active !== false ? 'Disable' : 'Enable'}</button>
                     <button class="btn btn-outline btn-sm btn-copy-webhook" data-path="${escapeHtml(ep.path)}">Copy URL</button>
                     <button class="btn btn-ghost btn-sm btn-delete-webhook" data-id="${ep.id}">Delete</button>
                 </div>
@@ -599,6 +627,30 @@
                 navigator.clipboard.writeText(url).then(() => {
                     showToast('Webhook URL copied', 'success');
                 });
+            });
+        });
+
+        // Toggle buttons
+        container.querySelectorAll('.btn-toggle-webhook').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                await fetch(`/api/webhooks/${btn.dataset.id}/toggle`, { method: 'POST' });
+                fetchWebhooks();
+                showToast('Webhook connection toggled', 'info');
+            });
+        });
+
+        // Test delivery buttons
+        container.querySelectorAll('.btn-test-webhook').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                try {
+                    const resp = await fetch(`/api/webhooks/${btn.dataset.id}/test`, { method: 'POST' });
+                    if (resp.ok) {
+                        showToast('Simulated test webhook delivery sent!', 'success');
+                        fetchRequests();
+                    }
+                } catch(e) {
+                    showToast('Test delivery error: ' + e.message, 'error');
+                }
             });
         });
 
