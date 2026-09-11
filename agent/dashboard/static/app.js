@@ -560,6 +560,7 @@
     // ============================================================
     function renderWebhookList(endpoints) {
         const container = $('#webhook-list');
+        if (!container) return;
         if (!endpoints || endpoints.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">

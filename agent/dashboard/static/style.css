@@ -535,3 +535,32 @@ body {
 .diff-line-remove { color: var(--error); }
 .diff-line-change { color: var(--warning); }
 .diff-none { color: var(--text-tertiary); font-size: 12px; font-style: italic; padding: 8px; }
+
+
+/* ============================================================
+   Webhook Cards
+   ============================================================ */
+.webhook-card { display: flex; align-items: flex-start; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); transition: background var(--transition-fast); gap: 16px; }
+.webhook-card:hover { background: var(--bg-hover); }
+.webhook-info { flex: 1; min-width: 0; }
+.webhook-name { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.webhook-path { font-family: var(--font-mono); font-size: 11px; color: var(--accent-primary); margin-bottom: 3px; }
+.webhook-meta { font-size: 11px; color: var(--text-tertiary); }
+
+/* ============================================================
+   Session Cards
+   ============================================================ */
+.session-card { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); transition: background var(--transition-fast); gap: 16px; }
+.session-card:hover { background: var(--bg-hover); }
+
+/* ============================================================
+   Discovery Grid
+   ============================================================ */
+.discovery-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; flex: 1; overflow-y: auto; }
+.discovery-card-section { padding: 16px 20px; border-right: 1px solid var(--border); min-height: 200px; }
+.discovery-card-section:last-child { border-right: none; }
+.discovery-card-section h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--text-primary); }
+@media (max-width: 700px) {
+    .discovery-grid { grid-template-columns: 1fr; }
+    .discovery-card-section { border-right: none; border-bottom: 1px solid var(--border); }
+}
