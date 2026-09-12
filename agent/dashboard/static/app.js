@@ -161,17 +161,28 @@
             });
         }
 
-        // Create webhook & mock button listeners with delegation
+        // Universal modal open button delegation
         document.addEventListener('click', (e) => {
-            const whBtn = e.target.closest('#btn-create-webhook');
-            if (whBtn) {
-                const overlay = document.getElementById('webhook-modal-overlay');
-                if (overlay) overlay.classList.remove('hidden');
+            if (!e.target) return;
+            if (e.target.closest('#btn-create-webhook')) {
+                const o = document.getElementById('webhook-modal-overlay');
+                if (o) o.classList.remove('hidden');
             }
-            const mockBtn = e.target.closest('#btn-add-mock');
-            if (mockBtn) {
-                const overlay = document.getElementById('mock-modal-overlay');
-                if (overlay) overlay.classList.remove('hidden');
+            if (e.target.closest('#btn-add-mock')) {
+                const o = document.getElementById('mock-modal-overlay');
+                if (o) o.classList.remove('hidden');
+            }
+            if (e.target.closest('#btn-add-route')) {
+                const o = document.getElementById('route-modal-overlay');
+                if (o) o.classList.remove('hidden');
+            }
+            if (e.target.closest('#btn-add-mutation')) {
+                const o = document.getElementById('mutation-modal-overlay');
+                if (o) o.classList.remove('hidden');
+            }
+            if (e.target.closest('#btn-add-sim')) {
+                const o = document.getElementById('sim-modal-overlay');
+                if (o) o.classList.remove('hidden');
             }
         });
 
