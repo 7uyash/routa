@@ -1,57 +1,62 @@
 /* ============================================================
-   Routa Dashboard � Light Design System
+   Routa Dashboard — Dark Terminal Design System
    ============================================================ */
 
 :root {
-    /* Color Palette - Light */
-    --bg-primary: #f5f5f7;
-    --bg-secondary: #ffffff;
-    --bg-tertiary: #f0f0f5;
-    --bg-elevated: #ffffff;
-    --bg-hover: #ebebf0;
-    --bg-active: #e2e2ea;
+    /* Color Palette - Pure Black Dark Theme */
+    --bg-primary: #000000;
+    --bg-secondary: #0a0a0c;
+    --bg-tertiary: #121215;
+    --bg-elevated: #16161a;
+    --bg-hover: #1c1c22;
+    --bg-active: #24242c;
 
-    --surface-glass: rgba(0, 0, 0, 0.02);
-    --surface-glass-hover: rgba(0, 0, 0, 0.04);
-    --surface-glass-border: rgba(0, 0, 0, 0.08);
+    --surface-glass: rgba(255, 255, 255, 0.03);
+    --surface-glass-hover: rgba(255, 255, 255, 0.06);
+    --surface-glass-border: rgba(255, 255, 255, 0.12);
 
-    --text-primary: #111118;
-    --text-secondary: #5c5c72;
-    --text-tertiary: #9090a8;
-    --text-accent: #4f46e5;
+    --text-primary: #ffffff;
+    --text-secondary: #a1a1aa;
+    --text-tertiary: #71717a;
+    --text-accent: #27c93f;
 
-    --accent-primary: #4f46e5;
-    --accent-primary-hover: #4338ca;
-    --accent-secondary: #7c3aed;
+    --accent-primary: #27c93f;
+    --accent-primary-hover: #20a833;
+    --accent-secondary: #ffbd2e;
 
-    --success: #16a34a;
-    --success-bg: rgba(22, 163, 74, 0.08);
-    --warning: #d97706;
-    --warning-bg: rgba(217, 119, 6, 0.08);
-    --error: #dc2626;
-    --error-bg: rgba(220, 38, 38, 0.08);
-    --info: #2563eb;
-    --info-bg: rgba(37, 99, 235, 0.08);
+    /* Mac / Terminal Signal Colors */
+    --mac-red: #ff5f56;
+    --mac-yellow: #ffbd2e;
+    --mac-green: #27c93f;
 
-    --method-get: #16a34a;
-    --method-post: #2563eb;
-    --method-put: #d97706;
-    --method-patch: #7c3aed;
-    --method-delete: #dc2626;
-    --method-head: #6b7280;
-    --method-options: #6d28d9;
+    --success: #27c93f;
+    --success-bg: rgba(39, 201, 63, 0.12);
+    --warning: #ffbd2e;
+    --warning-bg: rgba(255, 189, 46, 0.12);
+    --error: #ff5f56;
+    --error-bg: rgba(255, 95, 86, 0.12);
+    --info: #3b82f6;
+    --info-bg: rgba(59, 130, 246, 0.12);
 
-    --border: rgba(0, 0, 0, 0.08);
-    --border-strong: rgba(0, 0, 0, 0.14);
+    --method-get: #27c93f;
+    --method-post: #3b82f6;
+    --method-put: #ffbd2e;
+    --method-patch: #a855f7;
+    --method-delete: #ff5f56;
+    --method-head: #a1a1aa;
+    --method-options: #8b5cf6;
+
+    --border: rgba(255, 255, 255, 0.1);
+    --border-strong: rgba(255, 255, 255, 0.18);
 
     --radius-sm: 6px;
     --radius-md: 8px;
     --radius-lg: 12px;
     --radius-xl: 16px;
 
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.07);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
-    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.9);
 
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;

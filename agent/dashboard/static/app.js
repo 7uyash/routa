@@ -42,6 +42,9 @@
                 // Load data for the tab
                 if (tab.dataset.tab === 'webhooks') fetchWebhooks();
                 if (tab.dataset.tab === 'sessions') fetchSessions();
+                if (tab.dataset.tab === 'mocklab') fetchMocks();
+                if (tab.dataset.tab === 'discovery') fetchDiscovery();
+                if (tab.dataset.tab === 'apimap') fetchAPIMap();
             });
         });
     }
@@ -158,43 +161,19 @@
             });
         }
 
-        // Create webhook modal setup
-        const btnCreateWebhook = $('#btn-create-webhook');
-        if (btnCreateWebhook) {
-            btnCreateWebhook.addEventListener('click', () => {
-                const overlay = $('#webhook-modal-overlay');
+        // Create webhook & mock button listeners with delegation
+        document.addEventListener('click', (e) => {
+            const whBtn = e.target.closest('#btn-create-webhook');
+            if (whBtn) {
+                const overlay = document.getElementById('webhook-modal-overlay');
                 if (overlay) overlay.classList.remove('hidden');
-            });
-        }
-
-        const whClose = $('#webhook-modal-close');
-        const whCancel = $('#btn-wh-cancel');
-        const whOverlay = $('#webhook-modal-overlay');
-        const whSave = $('#btn-wh-save');
-        if (whClose) whClose.addEventListener('click', () => whOverlay && whOverlay.classList.add('hidden'));
-        if (whCancel) whCancel.addEventListener('click', () => whOverlay && whOverlay.classList.add('hidden'));
-        if (whOverlay) whOverlay.addEventListener('click', (e) => { if (e.target === whOverlay) whOverlay.classList.add('hidden'); });
-        if (whSave) {
-            whSave.addEventListener('click', async () => {
-                const name = ($('#wh-name') || {}).value || 'Webhook Endpoint';
-                const provider = ($('#wh-provider') || {}).value || 'Custom';
-                const secret = ($('#wh-secret') || {}).value || '';
-                try {
-                    const resp = await fetch('/api/webhooks', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, provider, secret })
-                    });
-                    if (resp.ok) {
-                        if (whOverlay) whOverlay.classList.add('hidden');
-                        fetchWebhooks();
-                        showToast('Webhook endpoint created!', 'success');
-                    }
-                } catch(e) {
-                    showToast('Error: ' + e.message, 'error');
-                }
-            });
-        }
+            }
+            const mockBtn = e.target.closest('#btn-add-mock');
+            if (mockBtn) {
+                const overlay = document.getElementById('mock-modal-overlay');
+                if (overlay) overlay.classList.remove('hidden');
+            }
+        });
 
         // Save session
         const btnSaveSession = $('#btn-save-session');
@@ -1160,14 +1139,7 @@
         }, 3000);
     }
 
-})();
 
-// ============================================================
-// Phase 3 - Discovery, API Map, Mock Lab
-// ============================================================
-
-(function() {
-    'use strict';
 
     document.addEventListener('DOMContentLoaded', function() {
         var discoveryTab = document.querySelector('[data-tab="discovery"]');
@@ -1203,6 +1175,10 @@
         var addMockBtn = document.getElementById('btn-add-mock');
         if (addMockBtn) addMockBtn.addEventListener('click', openMockModal);
         setupMockModal();
+
+        var createWebhookBtn = document.getElementById('btn-create-webhook');
+        if (createWebhookBtn) createWebhookBtn.addEventListener('click', openWebhookModal);
+        setupWebhookModal();
 
         var createMockFromReqBtn = document.getElementById('btn-create-mock-from-req');
         if (createMockFromReqBtn) {
@@ -1492,6 +1468,56 @@
                         showToast3('Mock endpoint created!', 'success');
                     } else {
                         showToast3('Failed to create mock', 'error');
+                    }
+                } catch (e) {
+                    showToast3('Error: ' + e.message, 'error');
+                }
+            });
+        }
+    }
+
+    function openWebhookModal() {
+        var overlay = document.getElementById('webhook-modal-overlay');
+        if (overlay) overlay.classList.remove('hidden');
+    }
+
+    function closeWebhookModal() {
+        var overlay = document.getElementById('webhook-modal-overlay');
+        if (overlay) overlay.classList.add('hidden');
+    }
+
+    function setupWebhookModal() {
+        var closeBtn = document.getElementById('webhook-modal-close');
+        var cancelBtn = document.getElementById('btn-wh-cancel');
+        var overlay = document.getElementById('webhook-modal-overlay');
+        var saveBtn = document.getElementById('btn-wh-save');
+
+        if (closeBtn) closeBtn.addEventListener('click', closeWebhookModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeWebhookModal);
+        if (overlay) {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) closeWebhookModal();
+            });
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async function() {
+                var name = (document.getElementById('wh-name') || {}).value || 'Webhook Endpoint';
+                var provider = (document.getElementById('wh-provider') || {}).value || 'Custom';
+                var secret = (document.getElementById('wh-secret') || {}).value || '';
+
+                try {
+                    var resp = await fetch('/api/webhooks', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: name, provider: provider, secret: secret })
+                    });
+                    if (resp.ok) {
+                        closeWebhookModal();
+                        fetchWebhooks();
+                        showToast3('Webhook endpoint created!', 'success');
+                    } else {
+                        showToast3('Failed to create webhook endpoint', 'error');
                     }
                 } catch (e) {
                     showToast3('Error: ' + e.message, 'error');

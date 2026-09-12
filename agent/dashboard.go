@@ -126,6 +126,9 @@ func (ds *DashboardServer) Start() error {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
 		if p == "/" || p == "/index.html" || p == "/style.css" || p == "/app.js" || p == "/logo.png" || p == "/favicon.ico" {
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
 			fileServer.ServeHTTP(w, r)
 			return
 		}
