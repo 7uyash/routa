@@ -41,6 +41,7 @@
 
                 // Load data for the tab
                 const t = tab.dataset.tab;
+                if (t === 'scenarios') fetchScenarios();
                 if (t === 'webhooks')  fetchWebhooks();
                 if (t === 'sessions')  fetchSessions();
                 if (t === 'mocklab')   fetchMocks();
@@ -1313,6 +1314,485 @@
             el.innerHTML = '<div class="diff-none">Error loading diff: ' + escapeHtml(String(e)) + '</div>';
         }
     }
+
+    // ============================================================
+    // Scenarios Feature Module
+    // ============================================================
+    let activeScenario = null;
+    let recordingStatusTimer = null;
+    let activeEditStepIndex = -1;
+
+    async function fetchScenarios() {
+        const listEl = $('#scenarios-list');
+        if (!listEl) return;
+        try {
+            const res = await fetch('/api/scenarios');
+            if (!res.ok) throw new Error('Failed to fetch scenarios');
+            const scenarios = await res.json();
+
+            if (!scenarios || scenarios.length === 0) {
+                listEl.innerHTML = `
+                    <div class="empty-state">
+                        <p>No saved scenarios yet.</p>
+                        <p class="empty-sub">Click "Start Recording", perform a real user flow in your app, then save as a named scenario.</p>
+                    </div>`;
+                return;
+            }
+
+            listEl.innerHTML = scenarios.map(sc => `
+                <div class="scenario-card ${activeScenario && activeScenario.id === sc.id ? 'active' : ''}" data-id="${escapeHtml(sc.id)}">
+                    <div class="scenario-card-title">${escapeHtml(sc.name)}</div>
+                    <div class="scenario-card-desc">${escapeHtml(sc.description || 'Recorded traffic flow')}</div>
+                    <div class="scenario-card-stats">
+                        <span>${sc.request_count} requests</span>
+                        <span>·</span>
+                        <span>${sc.service_count} services</span>
+                        <span>·</span>
+                        <span>${(sc.total_delay_ms / 1000).toFixed(1)}s total delay</span>
+                    </div>
+                </div>
+            `).join('');
+
+            $$('.scenario-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    selectScenario(card.dataset.id);
+                });
+            });
+
+            // Check live recording status
+            checkRecordingStatus();
+        } catch (e) {
+            listEl.innerHTML = `<div class="empty-state">Error loading scenarios: ${escapeHtml(e.message)}</div>`;
+        }
+    }
+
+    async function selectScenario(id) {
+        try {
+            const res = await fetch(`/api/scenarios/${id}`);
+            if (!res.ok) throw new Error('Failed to load scenario');
+            activeScenario = await res.json();
+            renderScenarioDetail(activeScenario);
+            fetchScenarios(); // update active card highlight
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
+    function renderScenarioDetail(sc) {
+        const emptyEl = $('#scenario-detail-empty');
+        const viewEl = $('#scenario-detail-view');
+        if (!emptyEl || !viewEl) return;
+
+        emptyEl.classList.add('hidden');
+        viewEl.classList.remove('hidden');
+
+        $('#sc-detail-title').textContent = sc.name;
+        
+        let servicesCount = new Set();
+        let totalDelay = 0;
+        (sc.steps || []).forEach(step => {
+            if (step.target_service) servicesCount.add(step.target_service);
+            totalDelay += (step.delay_ms || 0);
+        });
+
+        $('#sc-detail-meta').textContent = `${(sc.steps || []).length} requests · ${servicesCount.size || 1} services · ${(totalDelay / 1000).toFixed(1)}s delay preservation`;
+
+        // Render Variables
+        renderScenarioVars(sc.variables || {});
+
+        // Render Flow Graph
+        renderFlowGraph(sc.steps || []);
+
+        // Render Steps List
+        renderStepsList(sc.steps || []);
+
+        // Bind Actions
+        const btnReplay = $('#btn-replay-scenario-active');
+        if (btnReplay) {
+            btnReplay.onclick = () => replayScenario(sc.id);
+        }
+        const btnDelete = $('#btn-delete-scenario-active');
+        if (btnDelete) {
+            btnDelete.onclick = async () => {
+                if (!confirm(`Delete scenario "${sc.name}"?`)) return;
+                try {
+                    await fetch(`/api/scenarios/${sc.id}`, { method: 'DELETE' });
+                    showToast('Scenario deleted', 'info');
+                    activeScenario = null;
+                    viewEl.classList.add('hidden');
+                    emptyEl.classList.remove('hidden');
+                    fetchScenarios();
+                } catch (err) {
+                    showToast('Delete failed', 'error');
+                }
+            };
+        }
+    }
+
+    function renderScenarioVars(vars) {
+        const list = $('#sc-vars-list');
+        if (!list) return;
+
+        const entries = Object.entries(vars);
+        if (entries.length === 0) {
+            list.innerHTML = `<span style="font-size:11px;color:var(--text-tertiary);font-style:italic;">No environment variables defined (Click + Add Variable to set BASE_URL, USER_ID, etc.)</span>`;
+        } else {
+            list.innerHTML = entries.map(([k, v]) => `
+                <div class="var-pill">
+                    <span class="var-key">${escapeHtml(k)}:</span>
+                    <span class="var-val">${escapeHtml(v)}</span>
+                    <button class="btn-icon btn-del-var" data-key="${escapeHtml(k)}" style="margin-left:4px;">&times;</button>
+                </div>
+            `).join('');
+
+            $$('.btn-del-var').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    delete activeScenario.variables[btn.dataset.key];
+                    saveCurrentScenario();
+                };
+            });
+        }
+
+        const btnAdd = $('#btn-add-sc-var');
+        if (btnAdd) {
+            btnAdd.onclick = () => {
+                const key = prompt('Variable Name (e.g. USER_ID or BASE_URL):');
+                if (!key) return;
+                const val = prompt(`Value for ${key}:`);
+                if (val === null) return;
+                if (!activeScenario.variables) activeScenario.variables = {};
+                activeScenario.variables[key.trim()] = val.trim();
+                saveCurrentScenario();
+            };
+        }
+    }
+
+    function renderFlowGraph(steps) {
+        const graphEl = $('#sc-flow-graph');
+        if (!graphEl) return;
+
+        if (steps.length === 0) {
+            graphEl.innerHTML = '<div class="empty-state">No steps in flow sequence</div>';
+            return;
+        }
+
+        let html = `
+            <div class="flow-node start-node">
+                <div>START</div>
+            </div>
+        `;
+
+        steps.forEach((step, idx) => {
+            const delayStr = step.delay_ms ? `${step.delay_ms}ms` : '0ms';
+            html += `
+                <div class="flow-arrow">
+                    <span>↓</span>
+                    <span>${delayStr}</span>
+                </div>
+                <div class="flow-node">
+                    <span class="flow-method method-${(step.method || 'GET').toLowerCase()}">${escapeHtml(step.method)}</span>
+                    <span class="flow-path">${escapeHtml(step.path)}</span>
+                    <span class="flow-meta">${step.expected_status ? step.expected_status + ' OK' : '200 OK'}</span>
+                </div>
+            `;
+        });
+
+        html += `
+            <div class="flow-arrow">
+                <span>↓</span>
+            </div>
+            <div class="flow-node end-node">
+                <div>END</div>
+            </div>
+        `;
+
+        graphEl.innerHTML = html;
+    }
+
+    function renderStepsList(steps) {
+        const listEl = $('#sc-steps-list');
+        if (!listEl) return;
+
+        if (steps.length === 0) {
+            listEl.innerHTML = '<div class="empty-state">No steps added</div>';
+            return;
+        }
+
+        listEl.innerHTML = steps.map((step, idx) => `
+            <div class="replay-step-row" style="margin-bottom:8px;">
+                <div class="replay-step-header">
+                    <div>
+                        <strong style="margin-right:8px;">${idx + 1}. ${escapeHtml(step.name || step.method + ' ' + step.path)}</strong>
+                        <span class="method-badge method-${(step.method || 'GET').toLowerCase()}">${escapeHtml(step.method)}</span>
+                        <span style="font-family:var(--font-mono);font-size:11px;margin-left:6px;color:var(--text-main);">${escapeHtml(step.path)}</span>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <span style="font-size:10px;color:var(--text-tertiary);margin-right:6px;">Expected: ${step.expected_status || 200}</span>
+                        <button class="btn btn-xs btn-ghost btn-edit-step" data-idx="${idx}">Edit Step</button>
+                        <button class="btn btn-xs btn-ghost btn-del-step" data-idx="${idx}">&times;</button>
+                    </div>
+                </div>
+                ${step.extractions && step.extractions.length > 0 ? `
+                    <div style="font-size:10px;color:var(--accent-primary);margin-top:4px;">
+                        ⚡ Dynamic Extractions: ${step.extractions.map(e => `${e.var_name} = response.${e.expression}`).join(', ')}
+                    </div>` : ''}
+            </div>
+        `).join('');
+
+        $$('.btn-edit-step').forEach(btn => {
+            btn.onclick = () => openEditStepModal(parseInt(btn.dataset.idx, 10));
+        });
+
+        $$('.btn-del-step').forEach(btn => {
+            btn.onclick = () => {
+                const idx = parseInt(btn.dataset.idx, 10);
+                activeScenario.steps.splice(idx, 1);
+                saveCurrentScenario();
+            };
+        });
+    }
+
+    async function saveCurrentScenario() {
+        if (!activeScenario) return;
+        try {
+            const res = await fetch(`/api/scenarios/${activeScenario.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(activeScenario)
+            });
+            if (!res.ok) throw new Error('Failed to save scenario');
+            activeScenario = await res.json();
+            renderScenarioDetail(activeScenario);
+            showToast('Scenario saved', 'info');
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
+    // --- Recording Controls ---
+    async function checkRecordingStatus() {
+        try {
+            const res = await fetch('/api/scenarios/record/status');
+            if (!res.ok) return;
+            const status = await res.json();
+            updateRecordingUI(status);
+        } catch (e) {}
+    }
+
+    function updateRecordingUI(status) {
+        const banner = $('#scenario-rec-banner');
+        const stats = $('#rec-banner-stats');
+        const recBtnText = $('#rec-btn-text');
+
+        if (status && status.is_recording) {
+            if (banner) banner.classList.remove('hidden');
+            if (stats) stats.textContent = `Scenario: "${status.scenario_name}" · Captured: ${status.request_count} requests · ${status.duration_sec.toFixed(1)}s`;
+            if (recBtnText) recBtnText.textContent = `● Recording (${status.request_count})`;
+
+            if (!recordingStatusTimer) {
+                recordingStatusTimer = setInterval(checkRecordingStatus, 1500);
+            }
+        } else {
+            if (banner) banner.classList.add('hidden');
+            if (recBtnText) recBtnText.textContent = 'Record Scenario';
+            if (recordingStatusTimer) {
+                clearInterval(recordingStatusTimer);
+                recordingStatusTimer = null;
+            }
+        }
+    }
+
+    async function startRecordingScenario() {
+        const name = prompt('Scenario Name (e.g. checkout-flow):', 'checkout-flow');
+        if (!name) return;
+        try {
+            const res = await fetch('/api/scenarios/record/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            if (!res.ok) throw new Error('Failed to start recording');
+            const status = await res.json();
+            updateRecordingUI(status);
+            showToast(`Started traffic recording for "${name}". Perform actions in your app!`, 'info');
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
+    async function stopRecordingScenario() {
+        const modal = $('#save-scenario-modal-overlay');
+        if (modal) modal.classList.remove('hidden');
+    }
+
+    // --- Replay Execution Handler ---
+    async function replayScenario(scName) {
+        const modal = $('#replay-modal-overlay');
+        const titleEl = $('#replay-modal-title');
+        const summaryEl = $('#replay-status-summary');
+        const resultsEl = $('#replay-step-results');
+
+        if (!modal || !summaryEl || !resultsEl) return;
+
+        modal.classList.remove('hidden');
+        titleEl.textContent = `Replaying ${scName}...`;
+        summaryEl.className = 'scenario-replay-summary';
+        summaryEl.innerHTML = `<span class="status-indicator">Executing scenario steps sequentially...</span>`;
+        resultsEl.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-tertiary);">Replaying requests with delay timing &amp; dynamic variable substitution...</div>`;
+
+        try {
+            const res = await fetch(`/api/scenarios/${scName}/replay`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ maintain_delay: true })
+            });
+
+            if (!res.ok) throw new Error('Replay server error');
+            const result = await res.json();
+
+            // Render Replay Outcome
+            if (result.passed) {
+                summaryEl.className = 'scenario-replay-summary passed';
+                summaryEl.innerHTML = `✓ Scenario Passed — All ${result.passed_steps} / ${result.total_steps} requests successful (${(result.total_duration_ms / 1000).toFixed(2)}s)`;
+            } else {
+                summaryEl.className = 'scenario-replay-summary failed';
+                summaryEl.innerHTML = `✗ Scenario Failed — ${result.passed_steps} / ${result.total_steps} requests successful (${result.failed_steps} failed)`;
+            }
+
+            resultsEl.innerHTML = (result.step_results || []).map(step => {
+                const isPass = step.passed;
+                const statusClass = getStatusClass(step.status_code);
+                return `
+                    <div class="replay-step-row ${isPass ? 'pass' : 'fail'}">
+                        <div class="replay-step-header">
+                            <div>
+                                <span class="${isPass ? 'pass-badge' : 'fail-badge'}">${isPass ? '✓' : '✗'}</span>
+                                <strong>${escapeHtml(step.step_name)}</strong>
+                                <span class="method-badge method-${(step.method || 'GET').toLowerCase()}" style="margin-left:6px;">${escapeHtml(step.method)}</span>
+                                <span style="font-family:var(--font-mono);font-size:11px;margin-left:6px;color:var(--text-main);">${escapeHtml(step.path)}</span>
+                            </div>
+                            <div>
+                                <span class="status-badge ${statusClass}">${step.status_code}</span>
+                                <span style="font-size:10px;color:var(--text-tertiary);margin-left:6px;">${step.duration_ms}ms</span>
+                            </div>
+                        </div>
+                        ${(step.assertion_results || []).map(as => `
+                            <div style="font-size:11px;margin-top:4px;color:${as.passed ? 'var(--success)' : 'var(--error)'};">
+                                ${as.passed ? '✓ Assertion Pass' : '✗ Assertion Fail'}: Expected ${escapeHtml(as.expected)}, Received ${escapeHtml(as.received)} ${as.error ? '(' + escapeHtml(as.error) + ')' : ''}
+                            </div>
+                        `).join('')}
+                        ${Object.keys(step.extracted_vars || {}).length > 0 ? `
+                            <div style="font-size:10px;color:var(--accent-primary);margin-top:4px;">
+                                ⚡ Extracted: ${Object.entries(step.extracted_vars).map(([k,v]) => `${k}="${v}"`).join(', ')}
+                            </div>
+                        ` : ''}
+                        ${step.error ? `<div style="font-size:11px;color:var(--error);margin-top:4px;">Error: ${escapeHtml(step.error)}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            // Also reload inspector requests list since replayed entries show up in live inspector!
+            fetchRequests();
+
+        } catch (e) {
+            summaryEl.className = 'scenario-replay-summary failed';
+            summaryEl.textContent = `Replay Execution Error: ${e.message}`;
+        }
+    }
+
+    function openEditStepModal(idx) {
+        if (!activeScenario || !activeScenario.steps[idx]) return;
+        activeEditStepIndex = idx;
+        const step = activeScenario.steps[idx];
+
+        $('#edit-step-method').value = step.method || 'GET';
+        $('#edit-step-path').value = step.path || '';
+        $('#edit-step-status').value = step.expected_status || 200;
+        $('#edit-step-delay').value = step.delay_ms || 200;
+        $('#edit-step-body').value = step.body || '';
+
+        const modal = $('#edit-step-modal-overlay');
+        if (modal) modal.classList.remove('hidden');
+    }
+
+    // Modal listeners initialization for Scenarios
+    function initScenarioModalEvents() {
+        const btnRec = $('#btn-record-scenario');
+        if (btnRec) btnRec.onclick = startRecordingScenario;
+
+        const btnStartRec = $('#btn-start-scenario-rec');
+        if (btnStartRec) btnStartRec.onclick = startRecordingScenario;
+
+        const btnStopRec = $('#btn-stop-rec-scenario');
+        if (btnStopRec) btnStopRec.onclick = stopRecordingScenario;
+
+        // Save Scenario Modal
+        const saveModal = $('#save-scenario-modal-overlay');
+        const btnSaveClose = $('#save-sc-close');
+        const btnSaveCancel = $('#btn-save-sc-cancel');
+        const btnSaveConfirm = $('#btn-save-sc-confirm');
+
+        if (btnSaveClose) btnSaveClose.onclick = () => saveModal.classList.add('hidden');
+        if (btnSaveCancel) btnSaveCancel.onclick = () => saveModal.classList.add('hidden');
+        if (btnSaveConfirm) {
+            btnSaveConfirm.onclick = async () => {
+                const name = $('#save-sc-name').value || 'checkout-flow';
+                const desc = $('#save-sc-desc').value || 'Recorded traffic flow';
+                try {
+                    const res = await fetch('/api/scenarios/record/stop', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, description: desc })
+                    });
+                    if (!res.ok) throw new Error('Failed to save scenario');
+                    const sc = await res.json();
+                    saveModal.classList.add('hidden');
+                    showToast(`Scenario "${sc.name}" saved!`, 'info');
+                    checkRecordingStatus();
+                    fetchScenarios();
+                    selectScenario(sc.id);
+                } catch (e) {
+                    showToast(e.message, 'error');
+                }
+            };
+        }
+
+        // Edit Step Modal
+        const editStepModal = $('#edit-step-modal-overlay');
+        const btnEditStepClose = $('#edit-step-close');
+        const btnEditStepCancel = $('#btn-edit-step-cancel');
+        const btnEditStepSave = $('#btn-edit-step-save');
+
+        if (btnEditStepClose) btnEditStepClose.onclick = () => editStepModal.classList.add('hidden');
+        if (btnEditStepCancel) btnEditStepCancel.onclick = () => editStepModal.classList.add('hidden');
+        if (btnEditStepSave) {
+            btnEditStepSave.onclick = () => {
+                if (activeEditStepIndex < 0 || !activeScenario || !activeScenario.steps[activeEditStepIndex]) return;
+                const step = activeScenario.steps[activeEditStepIndex];
+                step.method = $('#edit-step-method').value;
+                step.path = $('#edit-step-path').value;
+                step.expected_status = parseInt($('#edit-step-status').value, 10) || 200;
+                step.delay_ms = parseInt($('#edit-step-delay').value, 10) || 0;
+                step.body = $('#edit-step-body').value;
+
+                editStepModal.classList.add('hidden');
+                saveCurrentScenario();
+            };
+        }
+
+        // Replay Modal Close
+        const replayModal = $('#replay-modal-overlay');
+        const btnReplayClose = $('#replay-modal-close');
+        const btnReplayDone = $('#btn-replay-close-done');
+        if (btnReplayClose) btnReplayClose.onclick = () => replayModal.classList.add('hidden');
+        if (btnReplayDone) btnReplayDone.onclick = () => replayModal.classList.add('hidden');
+    }
+
+    // Call initScenarioModalEvents on init
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(initScenarioModalEvents, 100);
+    });
 
     // ============================================================
     // Utilities

@@ -47,6 +47,10 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 Inspector
             </button>
+            <button class="nav-tab" data-tab="scenarios">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                Scenarios
+            </button>
             <button class="nav-tab" data-tab="discovery">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 Discovery
@@ -106,6 +110,10 @@
                     </select>
                 </div>
                 <div class="filter-actions">
+                    <button id="btn-record-scenario" class="btn btn-secondary" title="Record Traffic Flow as Scenario">
+                        <span class="rec-dot"></span>
+                        <span id="rec-btn-text">Record Scenario</span>
+                    </button>
                     <button id="btn-clear" class="btn btn-ghost" title="Clear all requests">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                         Clear
@@ -186,6 +194,87 @@
                                     <p class="empty-sub">Use Replay or Edit &amp; Replay to generate a comparison</p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scenarios Panel -->
+        <div id="tab-scenarios" class="tab-content">
+            <!-- Recording Banner Status -->
+            <div id="scenario-rec-banner" class="scenario-rec-banner hidden">
+                <div class="rec-banner-left">
+                    <span class="rec-pulse-dot"></span>
+                    <div>
+                        <div class="rec-banner-title">Recording Live Traffic Flow</div>
+                        <div class="rec-banner-sub" id="rec-banner-stats">Captured: 0 requests · 0.0s</div>
+                    </div>
+                </div>
+                <div class="rec-banner-actions">
+                    <button id="btn-stop-rec-scenario" class="btn btn-primary btn-sm">Stop &amp; Save Scenario</button>
+                </div>
+            </div>
+
+            <div class="panel-header">
+                <div>
+                    <h2>Traffic Recording → One-click Scenarios</h2>
+                    <p class="panel-desc">Record multi-step real user flows, preserve inter-request timing, extract dynamic variables, and replay anytime with visual assertion reporting.</p>
+                </div>
+                <div class="panel-header-actions">
+                    <button id="btn-start-scenario-rec" class="btn btn-primary">
+                        <span class="rec-dot"></span> Start Recording
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Scenarios Container: List + Detail View -->
+            <div id="scenarios-container" class="scenarios-grid">
+                <div class="scenarios-list-section">
+                    <h3>Saved Scenarios</h3>
+                    <div id="scenarios-list" class="scenarios-cards-list">
+                        <div class="empty-state">Loading scenarios…</div>
+                    </div>
+                </div>
+
+                <div class="scenarios-detail-section">
+                    <div id="scenario-detail-empty" class="empty-state">
+                        <p>Select a scenario to view flow visualization, edit steps &amp; replay.</p>
+                    </div>
+                    <div id="scenario-detail-view" class="hidden">
+                        <div class="scenario-detail-header">
+                            <div>
+                                <h3 id="sc-detail-title">checkout-flow</h3>
+                                <div class="scenario-meta-line" id="sc-detail-meta">6 requests · 4 services · 2.4s total delay</div>
+                            </div>
+                            <div class="scenario-header-actions">
+                                <button id="btn-replay-scenario-active" class="btn btn-success">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                    Replay Scenario
+                                </button>
+                                <button id="btn-delete-scenario-active" class="btn btn-ghost btn-danger">Delete</button>
+                            </div>
+                        </div>
+
+                        <!-- Scenario Variables Bar -->
+                        <div class="scenario-vars-box">
+                            <div class="scenario-vars-title">
+                                <span>Scenario Variables &amp; Environment</span>
+                                <button id="btn-add-sc-var" class="btn btn-xs btn-ghost">+ Add Variable</button>
+                            </div>
+                            <div id="sc-vars-list" class="scenario-vars-list"></div>
+                        </div>
+
+                        <!-- Flow Visualization Graph -->
+                        <div class="scenario-flow-container">
+                            <h4>Scenario Flow Visualization</h4>
+                            <div id="sc-flow-graph" class="scenario-flow-graph"></div>
+                        </div>
+
+                        <!-- Steps List View & Editor -->
+                        <div class="scenario-steps-container">
+                            <h4>Scenario Steps Sequence</h4>
+                            <div id="sc-steps-list" class="sc-steps-list"></div>
                         </div>
                     </div>
                 </div>
@@ -575,6 +664,91 @@
             <div class="modal-footer">
                 <button id="btn-wh-cancel" class="btn btn-ghost">Cancel</button>
                 <button id="btn-wh-save" class="btn btn-primary">Create Endpoint</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Scenario Modal -->
+    <div id="save-scenario-modal-overlay" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Save Recorded Scenario</h3>
+                <button id="save-sc-close" class="btn-icon">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label>Scenario Name</label>
+                    <input type="text" id="save-sc-name" placeholder="checkout-flow">
+                </div>
+                <div class="form-row">
+                    <label>Description</label>
+                    <input type="text" id="save-sc-desc" placeholder="Complete user order & checkout flow">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-save-sc-cancel" class="btn btn-ghost">Cancel</button>
+                <button id="btn-save-sc-confirm" class="btn btn-primary">Save Scenario</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Step Modal -->
+    <div id="edit-step-modal-overlay" class="modal-overlay hidden">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3>Edit Scenario Step</h3>
+                <button id="edit-step-close" class="btn-icon">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row" style="display:flex;gap:12px">
+                    <div style="flex:1">
+                        <label>Method</label>
+                        <select id="edit-step-method">
+                            <option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option>
+                        </select>
+                    </div>
+                    <div style="flex:3">
+                        <label>Path</label>
+                        <input type="text" id="edit-step-path" placeholder="/api/cart">
+                    </div>
+                </div>
+                <div class="form-row" style="display:flex;gap:12px">
+                    <div style="flex:1">
+                        <label>Expected Status Code</label>
+                        <input type="number" id="edit-step-status" value="200">
+                    </div>
+                    <div style="flex:1">
+                        <label>Inter-request Delay (ms)</label>
+                        <input type="number" id="edit-step-delay" value="200">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>Request Body (supports {{var_name}} variables)</label>
+                    <textarea id="edit-step-body" rows="4" style="width:100%;font-family:monospace;font-size:12px;background:var(--bg-card);color:var(--text-main);border:1px solid var(--border-color);border-radius:6px;padding:8px;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-edit-step-cancel" class="btn btn-ghost">Cancel</button>
+                <button id="btn-edit-step-save" class="btn btn-primary">Save Step Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Replay Results Modal -->
+    <div id="replay-modal-overlay" class="modal-overlay hidden">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3 id="replay-modal-title">Replaying Scenario...</h3>
+                <button id="replay-modal-close" class="btn-icon">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="replay-status-summary" class="scenario-replay-summary">
+                    <span class="status-indicator">Executing steps...</span>
+                </div>
+                <div id="replay-step-results" class="replay-step-results"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-replay-close-done" class="btn btn-primary">Close</button>
             </div>
         </div>
     </div>
