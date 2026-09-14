@@ -47,12 +47,15 @@ type DashboardServer struct {
 	webhook  *webhook.Lab
 	scanner  *discovery.Scanner
 	apiMap   *discovery.MapBuilder
-	mockLab  *mock.Lab
-	tunnel   *tunnel.Client
-	cfg      config.Config
-	server   *http.Server
-	upgrader websocket.Upgrader
-	agent    *Agent // back-pointer for hot-reloading routes/mutations
+	mockLab        *mock.Lab
+	tunnel         *tunnel.Client
+	scenarios      *storage.ScenarioStore
+	scenarioRec    *storage.ScenarioRecorder
+	scenarioRunner *storage.ScenarioRunner
+	cfg            config.Config
+	server         *http.Server
+	upgrader       websocket.Upgrader
+	agent          *Agent // back-pointer for hot-reloading routes/mutations
 
 	// WebSocket clients: keyed by send channel for safe concurrent broadcast.
 	wsMu      sync.RWMutex
@@ -64,17 +67,24 @@ func NewDashboardServer(port int, rec *recorder.Recorder, rep *replay.Engine,
 	store *storage.Store, wh *webhook.Lab, scn *discovery.Scanner, apiMap *discovery.MapBuilder,
 	ml *mock.Lab, tun *tunnel.Client, cfg config.Config) *DashboardServer {
 
+	scStore := storage.NewScenarioStore(cfg.SessionsDir())
+	scRec := storage.NewScenarioRecorder()
+	scRunner := storage.NewScenarioRunner(scStore, proxy.New(), rec)
+
 	ds := &DashboardServer{
-		port:    port,
-		rec:     rec,
-		replay:  rep,
-		storage: store,
-		webhook: wh,
-		scanner: scn,
-		apiMap:  apiMap,
-		mockLab: ml,
-		tunnel:  tun,
-		cfg:     cfg,
+		port:           port,
+		rec:            rec,
+		replay:         rep,
+		storage:        store,
+		webhook:        wh,
+		scanner:        scn,
+		apiMap:         apiMap,
+		mockLab:        ml,
+		tunnel:         tun,
+		scenarios:      scStore,
+		scenarioRec:    scRec,
+		scenarioRunner: scRunner,
+		cfg:            cfg,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -83,6 +93,7 @@ func NewDashboardServer(port int, rec *recorder.Recorder, rep *replay.Engine,
 
 	// Register live update callback on the recorder.
 	rec.OnChange(func(entry *recorder.Entry) {
+		ds.scenarioRec.RecordEntry(entry)
 		ds.broadcastEntry(entry)
 	})
 
@@ -116,6 +127,13 @@ func (ds *DashboardServer) Start() error {
 	mux.HandleFunc("/api/discovery/map", ds.handleAPIMap)
 	mux.HandleFunc("/api/mocks", ds.handleMocks)
 	mux.HandleFunc("/api/mocks/", ds.handleMockDetail)
+
+	// Scenario API routes.
+	mux.HandleFunc("/api/scenarios", ds.handleScenarios)
+	mux.HandleFunc("/api/scenarios/", ds.handleScenarioDetail)
+	mux.HandleFunc("/api/scenarios/record/start", ds.handleStartScenarioRecord)
+	mux.HandleFunc("/api/scenarios/record/stop", ds.handleStopScenarioRecord)
+	mux.HandleFunc("/api/scenarios/record/status", ds.handleScenarioRecordStatus)
 
 	staticFS, err := fs.Sub(staticFiles, "dashboard/static")
 	if err != nil {
@@ -968,5 +986,187 @@ func (ds *DashboardServer) handleMockDetail(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// handleScenarios — GET: list scenarios; POST: save/create scenario.
+func (ds *DashboardServer) handleScenarios(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		list, err := ds.scenarios.ListScenarios()
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+		if list == nil {
+			list = []storage.ScenarioSummary{}
+		}
+		writeJSON(w, http.StatusOK, list)
+
+	case "POST":
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 512*1024))
+		var sc storage.Scenario
+		if err := json.Unmarshal(body, &sc); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid JSON"})
+			return
+		}
+		if err := ds.scenarios.SaveScenario(&sc); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusCreated, sc)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleScenarioDetail — GET: load; PUT: update; DELETE: remove; POST .../replay: replay execution.
+func (ds *DashboardServer) handleScenarioDetail(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	subPath := strings.TrimPrefix(r.URL.Path, "/api/scenarios/")
+	if subPath == "" {
+		http.Error(w, "Missing scenario name", http.StatusBadRequest)
+		return
+	}
+
+	// Check for replay endpoint: /api/scenarios/{name}/replay
+	if strings.HasSuffix(subPath, "/replay") && r.Method == "POST" {
+		scName := strings.TrimSuffix(subPath, "/replay")
+		scName = strings.TrimSuffix(scName, "/")
+
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 64*1024))
+		var opts storage.ReplayOptions
+		if len(body) > 0 {
+			_ = json.Unmarshal(body, &opts)
+		}
+		opts.ScenarioName = scName
+		if opts.TargetBaseURL == "" {
+			opts.TargetBaseURL = ds.cfg.LocalTarget()
+		}
+
+		res, err := ds.scenarioRunner.Replay(r.Context(), opts)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+		return
+	}
+
+	scName := subPath
+	switch r.Method {
+	case "GET":
+		sc, err := ds.scenarios.LoadScenario(scName)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, sc)
+
+	case "PUT":
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 512*1024))
+		var sc storage.Scenario
+		if err := json.Unmarshal(body, &sc); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid JSON"})
+			return
+		}
+		if err := ds.scenarios.SaveScenario(&sc); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, sc)
+
+	case "DELETE":
+		if err := ds.scenarios.DeleteScenario(scName); err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"deleted": true})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleStartScenarioRecord — POST: starts capturing traffic to recording buffer.
+func (ds *DashboardServer) handleStartScenarioRecord(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, _ := io.ReadAll(io.LimitReader(r.Body, 64*1024))
+	var req struct {
+		Name string `json:"name"`
+	}
+	_ = json.Unmarshal(body, &req)
+
+	if req.Name == "" {
+		req.Name = "checkout-flow"
+	}
+
+	ds.scenarioRec.Start(req.Name)
+	writeJSON(w, http.StatusOK, ds.scenarioRec.GetStatus())
+}
+
+// handleStopScenarioRecord — POST: stops recording & creates structured scenario.
+func (ds *DashboardServer) handleStopScenarioRecord(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, _ := io.ReadAll(io.LimitReader(r.Body, 64*1024))
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	_ = json.Unmarshal(body, &req)
+
+	recName, entries := ds.scenarioRec.Stop()
+	if req.Name == "" {
+		req.Name = recName
+	}
+	if req.Name == "" {
+		req.Name = "recorded-scenario"
+	}
+
+	sc := storage.CreateScenarioFromEntries(req.Name, req.Description, entries)
+	if err := ds.scenarios.SaveScenario(sc); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusCreated, sc)
+}
+
+// handleScenarioRecordStatus — GET: returns recording status.
+func (ds *DashboardServer) handleScenarioRecordStatus(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, http.StatusOK, ds.scenarioRec.GetStatus())
+}
+
 // Ensure unused imports don't cause build errors.
 var _ = recorder.Entry{}
+
