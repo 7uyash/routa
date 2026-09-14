@@ -18,6 +18,7 @@ import (
 	"github.com/7uyash/routa/diff"
 	"github.com/7uyash/routa/discovery"
 	"github.com/7uyash/routa/mock"
+	"github.com/7uyash/routa/proxy"
 	"github.com/7uyash/routa/recorder"
 	"github.com/7uyash/routa/replay"
 	"github.com/7uyash/routa/router"

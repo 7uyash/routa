@@ -85,7 +85,7 @@ func TestScenarioStoreAndEngine(t *testing.T) {
 	}
 
 	// Verify Loading
-	loaded, err := store.LoadScenario("checkout-flow-test")
+	loaded, err := store.LoadScenario(sc.ID)
 	if err != nil {
 		t.Fatalf("LoadScenario failed: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestScenarioStoreAndEngine(t *testing.T) {
 
 	// Replay scenario against mock server
 	result, err := runner.Replay(context.Background(), ReplayOptions{
-		ScenarioName:  "checkout-flow-test",
+		ScenarioName:  sc.ID,
 		TargetBaseURL: srv.URL,
 		MaintainDelay: false,
 	})
@@ -141,7 +141,7 @@ func TestScenarioStoreAndEngine(t *testing.T) {
 	}
 
 	// Test Deletion
-	if err := store.DeleteScenario("checkout-flow-test"); err != nil {
+	if err := store.DeleteScenario(sc.ID); err != nil {
 		t.Fatalf("DeleteScenario failed: %v", err)
 	}
 	listAfter, _ := store.ListScenarios()
