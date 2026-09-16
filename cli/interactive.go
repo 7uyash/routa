@@ -11,7 +11,7 @@ import (
 )
 
 func runInteractiveMainMenu() (*Command, error) {
-	fmt.Println("Routa — Developer Traffic Gateway\n")
+	fmt.Println("Routa — Developer Traffic Gateway")
 
 	var action string
 	err := huh.NewSelect[string]().
@@ -149,7 +149,7 @@ func runInteractiveDev() (*Command, error) {
 }
 
 func runInteractiveRelay() (*Command, error) {
-	fmt.Println("\nConfigure Routa Relay\n")
+	fmt.Println("\nConfigure Routa Relay")
 
 	cfg := config.DefaultConfig()
 	cfg.LoadFromEnv()

@@ -7,6 +7,7 @@ import (
 
 	"github.com/7uyash/routa/proxy"
 	"github.com/7uyash/routa/recorder"
+	"github.com/7uyash/routa/traffic"
 )
 
 // PlaybackEngine plays a saved session deterministically.
@@ -82,7 +83,17 @@ func (p *PlaybackEngine) Play(ctx context.Context, opts PlaybackOptions) error {
 			fullURL += "?" + orig.Query
 		}
 
-		resp, err := p.proxy.Forward(orig.Method, fullURL, orig.RequestHeaders, orig.RequestBody)
+		resp, err := p.proxy.Forward(
+			traffic.Request{
+				Method:  orig.Method,
+				Path:    orig.Path,
+				Query:   orig.Query,
+				Headers: orig.RequestHeaders,
+				Body:    orig.RequestBody,
+				Host:    orig.Host,
+			},
+			fullURL,
+		)
 
 		newEntry := &recorder.Entry{
 			Timestamp:      time.Now(),

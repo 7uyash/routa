@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/7uyash/routa/protocol"
+	"github.com/7uyash/routa/traffic"
 )
 
 // Entry represents a single captured HTTP request/response exchange.
@@ -28,8 +28,8 @@ type Entry struct {
 	ResponseBody    []byte              `json:"response_body"`
 
 	// Timing
-	Duration        time.Duration        `json:"duration_ms"`
-	TimingBreakdown *protocol.TimingInfo `json:"timing_breakdown,omitempty"`
+	Duration        time.Duration   `json:"duration_ms"`
+	TimingBreakdown *traffic.Timing `json:"timing_breakdown,omitempty"`
 
 	// Metadata
 	IsReplay   bool     `json:"is_replay"`

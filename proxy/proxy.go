@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/7uyash/routa/protocol"
+	"github.com/7uyash/routa/traffic"
 )
 
 // Forwarder sends HTTP requests to a local target and captures timing.
@@ -31,21 +31,21 @@ func New() *Forwarder {
 
 // Forward sends the request to the given target URL and returns the response
 // with a timing breakdown. It does not follow redirects.
-func (f *Forwarder) Forward(method, targetURL string, headers map[string][]string, body []byte) (*Response, error) {
+func (f *Forwarder) Forward(req traffic.Request, targetURL string) (*traffic.Response, error) {
 	start := time.Now()
 
 	var bodyReader io.Reader
-	if len(body) > 0 {
-		bodyReader = strings.NewReader(string(body))
+	if len(req.Body) > 0 {
+		bodyReader = strings.NewReader(string(req.Body))
 	}
 
-	req, err := http.NewRequest(method, targetURL, bodyReader)
+	httpReq, err := http.NewRequest(req.Method, targetURL, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
 	// Copy headers, skipping hop-by-hop headers that shouldn't be forwarded.
-	for k, vals := range headers {
+	for k, vals := range req.Headers {
 		key := strings.ToLower(k)
 		if key == "host" || key == "connection" || key == "upgrade" ||
 			key == "transfer-encoding" || key == "keep-alive" ||
@@ -53,11 +53,11 @@ func (f *Forwarder) Forward(method, targetURL string, headers map[string][]strin
 			continue
 		}
 		for _, v := range vals {
-			req.Header.Add(k, v)
+			httpReq.Header.Add(k, v)
 		}
 	}
 
-	resp, err := f.client.Do(req)
+	resp, err := f.client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("forward request: %w", err)
 	}
@@ -71,25 +71,17 @@ func (f *Forwarder) Forward(method, targetURL string, headers map[string][]strin
 	total := time.Since(start)
 
 	// Collect response headers.
-	respHeaders := make(map[string][]string)
+	respHeaders := make(http.Header)
 	for k, v := range resp.Header {
 		respHeaders[k] = v
 	}
 
-	return &Response{
+	return &traffic.Response{
 		StatusCode: resp.StatusCode,
 		Headers:    respHeaders,
 		Body:       respBody,
-		Timing: &protocol.TimingInfo{
+		Timing: &traffic.Timing{
 			Total: total,
 		},
 	}, nil
-}
-
-// Response holds the result of a forwarded request.
-type Response struct {
-	StatusCode int
-	Headers    map[string][]string
-	Body       []byte
-	Timing     *protocol.TimingInfo
 }

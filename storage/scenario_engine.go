@@ -12,6 +12,7 @@ import (
 
 	"github.com/7uyash/routa/proxy"
 	"github.com/7uyash/routa/recorder"
+	"github.com/7uyash/routa/traffic"
 )
 
 // ScenarioRecorder controls active traffic recording sessions.
@@ -220,7 +221,16 @@ func (sr *ScenarioRunner) Replay(ctx context.Context, opts ReplayOptions) (*Scen
 		}
 
 		stepStart := time.Now()
-		resp, fwdErr := sr.proxy.Forward(step.Method, fullURL, renderedHeaders, []byte(renderedBody))
+		resp, fwdErr := sr.proxy.Forward(
+			traffic.Request{
+				Method:  step.Method,
+				Path:    renderedPath,
+				Query:   renderedQuery,
+				Headers: renderedHeaders,
+				Body:    []byte(renderedBody),
+			},
+			fullURL,
+		)
 		stepDuration := time.Since(stepStart).Milliseconds()
 
 		stepRes := &StepExecutionResult{
@@ -336,7 +346,7 @@ func replaceVariables(input string, vars map[string]string) string {
 }
 
 // evaluateAssertion checks an assertion rule against status code and response payload.
-func evaluateAssertion(rule AssertionRule, statusCode int, resp *proxy.Response) AssertionResult {
+func evaluateAssertion(rule AssertionRule, statusCode int, resp *traffic.Response) AssertionResult {
 	res := AssertionResult{
 		Type:     rule.Type,
 		Target:   rule.Target,
@@ -380,7 +390,7 @@ func evaluateAssertion(rule AssertionRule, statusCode int, resp *proxy.Response)
 }
 
 // extractVariable extracts variable values from response body or headers based on extraction rules.
-func extractVariable(ext ExtractionRule, resp *proxy.Response) string {
+func extractVariable(ext ExtractionRule, resp *traffic.Response) string {
 	if resp == nil {
 		return ""
 	}

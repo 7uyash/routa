@@ -6,6 +6,7 @@ import (
 
 	"github.com/7uyash/routa/proxy"
 	"github.com/7uyash/routa/recorder"
+	"github.com/7uyash/routa/traffic"
 )
 
 // Engine replays recorded requests against a local service.
@@ -37,10 +38,15 @@ func (e *Engine) Replay(entryID, localTarget string) (*recorder.Entry, error) {
 
 	start := time.Now()
 	resp, err := e.forwarder.Forward(
-		original.Method,
+		traffic.Request{
+			Method:  original.Method,
+			Path:    original.Path,
+			Query:   original.Query,
+			Headers: original.RequestHeaders,
+			Body:    original.RequestBody,
+			Host:    original.Host,
+		},
 		targetURL,
-		original.RequestHeaders,
-		original.RequestBody,
 	)
 
 	entry := &recorder.Entry{
@@ -83,10 +89,14 @@ func (e *Engine) EditAndReplay(req EditRequest, localTarget string) (*recorder.E
 
 	start := time.Now()
 	resp, err := e.forwarder.Forward(
-		req.Method,
+		traffic.Request{
+			Method:  req.Method,
+			Path:    req.Path,
+			Query:   req.Query,
+			Headers: req.Headers,
+			Body:    req.Body,
+		},
 		targetURL,
-		req.Headers,
-		req.Body,
 	)
 
 	entry := &recorder.Entry{

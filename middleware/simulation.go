@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/7uyash/routa/config"
+	"github.com/7uyash/routa/traffic"
 )
 
 // Simulator applies network/failure simulation rules to a request before
@@ -54,11 +55,11 @@ type SimResult struct {
 // Simulate evaluates all matching rules for the given request and returns
 // a SimResult. If multiple rules match, the first one wins (except delay
 // which accumulates).
-func (s *Simulator) Simulate(method, path string) SimResult {
+func (s *Simulator) Simulate(req traffic.Request) SimResult {
 	result := SimResult{}
 
 	for _, rule := range s.rules {
-		if !simMatchesRule(rule.Match, method, path) {
+		if !simMatchesRule(rule.Match, req.Method, req.Path) {
 			continue
 		}
 		if result.MatchedRule == "" {
