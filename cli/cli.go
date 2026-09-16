@@ -19,14 +19,19 @@ type Command struct {
 // Parse parses command-line arguments and returns a Command.
 func Parse() (*Command, error) {
 	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
+		return runInteractiveMainMenu()
 	}
 
 	switch os.Args[1] {
 	case "dev":
+		if len(os.Args) == 2 {
+			return runInteractiveDev()
+		}
 		return parseDev()
 	case "relay":
+		if len(os.Args) == 2 {
+			return runInteractiveRelay()
+		}
 		return parseRelay()
 	case "version":
 		fmt.Println("routa v0.1.0")
