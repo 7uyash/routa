@@ -4,145 +4,97 @@ Routa exposes your local HTTP service to the internet through a WebSocket tunnel
 
 ---
 
+## ⚡ Quick Start (The Shortest Way)
+
+Install the latest version using Go:
+```powershell
+go install github.com/7uyash/routa/cmd/routa@latest
+```
+
+Start Routa locally (no target required at startup):
+```powershell
+routa dev
+```
+*(This instantly launches the Dashboard in your browser where you can pick or enter a target dynamically!)*
+
+If you already know the port you want to proxy (e.g., 3000):
+```powershell
+routa dev 3000
+```
+
+---
+
 ## How it works
 
 ```
   Browser / API client
          |
-  [Relay Server]  ←── runs on a public machine (VPS / cloud)
-         |  WebSocket tunnel
-  [Routa Agent]   ←── runs on your laptop
+  [Routa Local Proxy]   ←── http://localhost:4000 (Your local entry point)
          |
-  localhost:3000   ←── your local service
+  [Routa Agent]         ←── Logs, Inspects, Mutates, Simulates
+         |
+  [Local Service]       ←── localhost:3000 (Your app)
 ```
 
-The **relay** is a lightweight edge server you self-host. The **agent** connects to it and forwards all incoming HTTP requests to your local service. There is no managed cloud — you host both ends.
+Routa is designed to make local API testing flawless. When you run `routa dev`, it spins up:
+1. **A Dashboard (`http://localhost:4040`)** — To configure rules, mock endpoints, and monitor traffic in real time.
+2. **A Dedicated Local Proxy (`http://localhost:4000`)** — Your new entry point. Access this URL, and Routa forwards everything accurately to your local application, allowing you to intercept traffic even for root routes (`/`).
 
 ---
 
-## Installation
+## Features
 
-### Pre-built binaries
-
-| Platform | Binary |
-|----------|--------|
-| macOS (Apple Silicon) | `bin/routa-darwin-arm64` |
-| macOS (Intel) | `bin/routa-darwin-amd64` |
-| Linux ARM64 | `bin/routa-linux-arm64` |
-| Linux AMD64 | `bin/routa-linux-amd64` |
-| Windows AMD64 | `bin/routa-windows-amd64.exe` |
-| Windows ARM64 | `bin/routa-windows-arm64.exe` |
-
-**macOS / Linux:**
-```bash
-git clone https://github.com/7uyash/routa.git
-cd routa
-chmod +x bin/routa-darwin-arm64        # or your platform binary
-sudo mv bin/routa-darwin-arm64 /usr/local/bin/routa
-```
-
-**Windows (PowerShell):**
-```powershell
-git clone https://github.com/7uyash/routa.git
-cd routa
-# Run directly:
-.\bin\routa-windows-amd64.exe dev 3000
-# Or install globally:
-Copy-Item .\bin\routa-windows-amd64.exe C:\Windows\System32\routa.exe
-```
-
-### Build from source
-```bash
-# Requires Go 1.21+
-go build -o routa ./cmd/routa
-
-# Cross-compile all platforms
-make build-all          # Linux / macOS
-.\build.ps1             # Windows
-```
-
----
-
-## Quick start
-
-### Step 1 — Start the relay (on a public server)
-```bash
-routa relay --port 8080 --domain myserver.com:8080
-```
-
-### Step 2 — Expose your local service (on your laptop)
-```bash
-routa dev 3000 --relay ws://myserver.com:8080 --name my-app
-```
-
-Your service is now reachable at `http://my-app.myserver.com:8080`.  
-Dashboard: `http://localhost:4040`
+- **Dynamic Target Selection** — Change your proxy destination straight from the UI without restarting the terminal process.
+- **Service Discovery** — Instantly discovers services running on local ports and auto-detects their tech stack (Vite, Next.js, Express, FastAPI, etc.).
+- **Traffic Inspector** — Live feed of all requests/responses with headers, bodies, and timing.
+- **Replay** — Re-send any captured request; edit method/path/headers/body before replaying.
+- **Mutation Rules** — Add/edit/remove request & response mutation rules at runtime.
+- **Network Simulator** — Inject latency, jitter, error rates, and connection drops per path.
+- **Mock Lab** — Define HTTP endpoints that return fixed responses without touching your service.
+- **Webhook Lab** — Receive and inspect incoming webhooks.
+- **Shadow Traffic** — Mirror traffic to secondary targets and diff responses.
+- **Session Recorder** — Record request collections and play them back deterministically.
 
 ---
 
 ## Usage
 
-### Interactive mode (no arguments)
-```bash
-routa
-```
-Shows a terminal UI where you:
-1. Choose **Expose a local service** or **Start a relay server**
-2. For dev mode — auto-discovers running local services and lets you pick one
-3. Configures tunnel name, relay URL, and auth interactively
-
-### Dev mode (expose a local service)
+### Local Proxy Mode (Dev Mode)
 ```bash
 routa dev <port> [flags]
 
-# Shorthand — port only:
-routa 3000
+# Start and pick target from the Dashboard
+routa dev
 ```
 
 **Flags:**
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--relay <url>` | *(required unless set via env)* | Relay WebSocket URL, e.g. `ws://myserver.com:8080` |
+| `--relay <url>` | — | Relay WebSocket URL, e.g. `ws://myserver.com:8080` |
 | `--name <name>` | *(random)* | Tunnel name / public subdomain |
 | `--dashboard <port>` | `4040` | Local dashboard port |
+| `--proxy <port>` | `4000` | Local proxy port |
 | `--token <token>` | — | Auth token for the relay |
 | `--auth-user <user>` | — | Basic auth username on the public endpoint |
 | `--auth-pass <pass>` | — | Basic auth password on the public endpoint |
 | `--host <host>` | `localhost` | Local host to forward to |
 | `--max-entries <n>` | `500` | Max requests kept in traffic inspector |
 
-**Examples:**
+### Public Tunnel Relay Mode
+
+Want to share your local environment with someone else or hook it up to external webhooks? You can spin up a lightweight, self-hosted edge server:
+
+**Step 1 — Start the relay (on a public server)**
 ```bash
-routa dev 3000
-routa dev 8080 --name api --relay ws://relay.example.com:8080
-routa dev 5173 --token secret123
-routa dev 3000 --auth-user admin --auth-pass secret  # protect the public URL
+routa relay --port 8080 --domain myserver.com:8080
 ```
 
-### Relay mode (run the edge server)
+**Step 2 — Expose your local service (on your laptop)**
 ```bash
-routa relay [flags]
+routa dev 3000 --relay ws://myserver.com:8080 --name my-app
 ```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--port <port>` | `8080` | Port to listen on |
-| `--host <host>` | `0.0.0.0` | Host to bind to |
-| `--domain <domain>` | `localhost` | Base domain for subdomains |
-
-**Example:**
-```bash
-routa relay --port 8080 --domain relay.example.com:8080
-```
-
-### Other commands
-```bash
-routa version     # Print version (v0.1.0)
-routa help        # Print usage
-routa --help
-routa -h
-```
+Your service is now securely reachable at `http://my-app.myserver.com:8080`.
 
 ---
 
@@ -156,9 +108,8 @@ tunnel:
   relay_url: "ws://myserver.com:8080"
   name: "my-app"
   dashboard_port: 4040
+  proxy_port: 4000
   auth_token: ""
-  basic_auth_user: ""
-  basic_auth_pass: ""
 
 routes:
   - pattern: "/api/users/*"
@@ -229,24 +180,6 @@ recording:
 
 ---
 
-## Dashboard (http://localhost:4040)
-
-The local dashboard gives you:
-
-- **Traffic Inspector** — Live feed of all requests/responses with headers, bodies, and timing
-- **Replay** — Re-send any captured request; edit method/path/headers/body before replaying
-- **Mutation Rules** — Add/edit/remove request & response mutation rules at runtime
-- **Network Simulator** — Inject latency, jitter, error rates, and connection drops per path
-- **Mock Lab** — Define HTTP endpoints that return fixed responses without touching your service
-- **Webhook Lab** — Receive and inspect incoming webhooks
-- **Shadow Traffic** — Mirror traffic to secondary targets and diff responses
-- **Service Discovery** — See all detected local services and their tech stack
-- **Route Manager** — Configure path-based routing to multiple local services
-- **Session Recorder** — Record request collections and play them back deterministically
-- **Scenario Runner** — Run multi-step request sequences with variable extraction and assertions
-
----
-
 ## Environment variables
 
 All config can be set via environment variables:
@@ -257,6 +190,7 @@ All config can be set via environment variables:
 | `ROUTA_RELAY_URL` | Relay WebSocket URL |
 | `ROUTA_AUTH_TOKEN` | Auth token |
 | `ROUTA_DASHBOARD_PORT` | Dashboard port |
+| `ROUTA_PROXY_PORT` | Local proxy port |
 | `ROUTA_TUNNEL_NAME` | Tunnel name |
 | `ROUTA_BASIC_AUTH_USER` | Basic auth username |
 | `ROUTA_BASIC_AUTH_PASS` | Basic auth password |
@@ -266,13 +200,18 @@ All config can be set via environment variables:
 
 ---
 
-## Local service discovery
+## Installation via Source
 
-When running in interactive mode (`routa` or `routa dev` with no port), Routa scans these ports for active HTTP services:
+```bash
+# Requires Go 1.21+
+git clone https://github.com/7uyash/routa.git
+cd routa
+go build -o routa ./cmd/routa
 
-`3000, 3001, 3002, 4000, 4200, 5000, 5001, 5173, 8000, 8001, 8080, 8081, 8082, 8088, 8888, 9000, 9090, 9091`
-
-It identifies tech stacks from response headers (Express, Next.js, FastAPI, Spring Boot, Vite, etc.) and shows them in a pick-list.
+# Cross-compile all platforms
+make build-all          # Linux / macOS
+.\build.ps1             # Windows
+```
 
 ---
 
