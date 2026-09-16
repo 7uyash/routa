@@ -27,9 +27,9 @@ type Response struct {
 
 // Timing tracks the latency breakdown for a forwarded request.
 type Timing struct {
-	DNSLookup    time.Duration
-	TCPConnect   time.Duration
-	TLSHandshake time.Duration
-	FirstByte    time.Duration
-	Total        time.Duration
+	DNSLookup    time.Duration `json:"dns_lookup_ms"`
+	TCPConnect   time.Duration `json:"tcp_connect_ms"`
+	TLSHandshake time.Duration `json:"tls_handshake_ms"`
+	FirstByte    time.Duration `json:"first_byte_ms"`
+	Total        time.Duration `json:"total_ms"`
 }
