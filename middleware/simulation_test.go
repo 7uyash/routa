@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/7uyash/routa/config"
+	"github.com/7uyash/routa/traffic"
 )
 
 func simRule(name, path, method string) config.SimulationConfig {
@@ -23,7 +24,7 @@ func TestSimulatorNoMatch(t *testing.T) {
 		}(),
 	})
 
-	res := s.Simulate("GET", "/health")
+	res := s.Simulate(traffic.Request{Method: "GET", Path: "/health"})
 	if res.Delay != 0 {
 		t.Errorf("Delay should be 0 for non-matching path, got %v", res.Delay)
 	}
@@ -41,7 +42,7 @@ func TestSimulatorLatencyInjection(t *testing.T) {
 		}(),
 	})
 
-	res := s.Simulate("POST", "/api/users")
+	res := s.Simulate(traffic.Request{Method: "POST", Path: "/api/users"})
 	if res.Delay < 100*time.Millisecond {
 		t.Errorf("Delay too low: %v, want >= 100ms", res.Delay)
 	}
@@ -59,7 +60,7 @@ func TestSimulatorDrop(t *testing.T) {
 		}(),
 	})
 
-	res := s.Simulate("GET", "/anything")
+	res := s.Simulate(traffic.Request{Method: "GET", Path: "/anything"})
 	if !res.ShouldDrop {
 		t.Error("expected ShouldDrop = true")
 	}
@@ -77,7 +78,7 @@ func TestSimulatorErrorInjection100Pct(t *testing.T) {
 
 	// With 100% error rate, should always inject an error
 	for i := 0; i < 5; i++ {
-		res := s.Simulate("GET", "/unstable/endpoint")
+		res := s.Simulate(traffic.Request{Method: "GET", Path: "/unstable/endpoint"})
 		if res.InjectedStatus != 503 {
 			t.Errorf("iteration %d: InjectedStatus = %d, want 503", i, res.InjectedStatus)
 		}
@@ -96,7 +97,7 @@ func TestSimulatorErrorInjection0Pct(t *testing.T) {
 
 	// 0% rate should never inject
 	for i := 0; i < 10; i++ {
-		res := s.Simulate("GET", "/api/test")
+		res := s.Simulate(traffic.Request{Method: "GET", Path: "/api/test"})
 		if res.InjectedStatus != 0 {
 			t.Errorf("0%% rate triggered injection on iteration %d", i)
 		}
@@ -112,12 +113,12 @@ func TestSimulatorMethodMatch(t *testing.T) {
 		}(),
 	})
 
-	resPost := s.Simulate("POST", "/anything")
+	resPost := s.Simulate(traffic.Request{Method: "POST", Path: "/anything"})
 	if resPost.Delay == 0 {
 		t.Error("POST should match and have delay")
 	}
 
-	resGet := s.Simulate("GET", "/anything")
+	resGet := s.Simulate(traffic.Request{Method: "GET", Path: "/anything"})
 	if resGet.Delay != 0 {
 		t.Error("GET should not match POST rule")
 	}
@@ -132,7 +133,7 @@ func TestSimulatorTimeout(t *testing.T) {
 		}(),
 	})
 
-	res := s.Simulate("GET", "/any")
+	res := s.Simulate(traffic.Request{Method: "GET", Path: "/any"})
 	if res.TimeoutMs != 5000 {
 		t.Errorf("TimeoutMs = %d, want 5000", res.TimeoutMs)
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/7uyash/routa/router"
 	"github.com/7uyash/routa/shadow"
 	"github.com/7uyash/routa/storage"
+	"github.com/7uyash/routa/traffic"
 	"github.com/7uyash/routa/tunnel"
 	"github.com/7uyash/routa/webhook"
 )
@@ -186,42 +187,53 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 
 	start := time.Now()
 
-	// 1. Webhook check
-	if epID := a.webhook.MatchPath(reqMsg.Path); epID != "" {
-		a.webhook.RecordDelivery(epID, reqMsg.Method, reqMsg.Headers, reqMsg.Body)
+	// Convert protocol edge-type → canonical traffic.Request for the internal pipeline.
+	incomingReq := traffic.Request{
+		Method:  reqMsg.Method,
+		Path:    reqMsg.Path,
+		Query:   reqMsg.Query,
+		Headers: reqMsg.Headers,
+		Body:    reqMsg.Body,
+		Host:    reqMsg.Host,
 	}
 
-	// 2. Mock Lab match check (Short-circuits backend forwarding if mock rule matches)
-	if mockRule := a.mockLab.MatchRequest(reqMsg.Method, reqMsg.Path); mockRule != nil {
-		status, headers, body := mockRule.ServeMock()
-		entry := &recorder.Entry{
-			Timestamp:      start,
-			Method:         reqMsg.Method,
-			Path:           reqMsg.Path,
-			Query:          reqMsg.Query,
-			RequestHeaders: reqMsg.Headers,
-			RequestBody:    reqMsg.Body,
-			StatusCode:     status,
-			ResponseHeaders: make(map[string][]string),
-			ResponseBody:   body,
-			Duration:       time.Since(start),
-			Host:           reqMsg.Host,
-			Source:         "mock_lab",
-		}
-		for k, v := range headers {
-			entry.ResponseHeaders[k] = []string{v}
-		}
+	// 1. Webhook check
+	if epID := a.webhook.MatchPath(incomingReq.Path); epID != "" {
+		a.webhook.RecordDelivery(epID, incomingReq.Method, incomingReq.Headers, incomingReq.Body)
+	}
 
+	// 2. Mock Lab match check (short-circuits backend forwarding if a mock rule matches)
+	if mockRule := a.mockLab.MatchRequest(incomingReq.Method, incomingReq.Path); mockRule != nil {
+		status, headers, body := mockRule.ServeMock()
+		respHeaders := make(map[string][]string, len(headers))
+		for k, v := range headers {
+			respHeaders[k] = []string{v}
+		}
+		entry := &recorder.Entry{
+			Timestamp:       start,
+			Method:          incomingReq.Method,
+			Path:            incomingReq.Path,
+			Query:           incomingReq.Query,
+			RequestHeaders:  incomingReq.Headers,
+			RequestBody:     incomingReq.Body,
+			StatusCode:      status,
+			ResponseHeaders: respHeaders,
+			ResponseBody:    body,
+			Duration:        time.Since(start),
+			Host:            incomingReq.Host,
+			Source:          "mock_lab",
+		}
 		a.recorder.Record(entry)
-		a.sendHTTPResponse(frame.RequestID, status, entry.ResponseHeaders, body)
-		log.Printf("[agent] [Mock Lab] %s %s → %d (%s)", reqMsg.Method, reqMsg.Path, status, entry.Duration.Round(time.Millisecond))
+		a.sendHTTPResponse(frame.RequestID, status, respHeaders, body)
+		log.Printf("[agent] [Mock Lab] %s %s → %d (%s)", incomingReq.Method, incomingReq.Path, status, entry.Duration.Round(time.Millisecond))
 		return
 	}
 
 	// 3. Traffic Mutation (Request Phase)
-	mutReq := a.mutator.ApplyToRequest(reqMsg.Method, reqMsg.Path, reqMsg.Query, reqMsg.Headers, reqMsg.Body)
+	mutResult := a.mutator.ApplyToRequest(incomingReq)
+	mutReq := mutResult.Request
 
-	// Build base recorder entry
+	// Build base recorder entry from the (possibly mutated) request.
 	entry := &recorder.Entry{
 		Timestamp:      start,
 		Method:         mutReq.Method,
@@ -229,28 +241,24 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 		Query:          mutReq.Query,
 		RequestHeaders: mutReq.Headers,
 		RequestBody:    mutReq.Body,
-		Host:           reqMsg.Host,
+		Host:           mutReq.Host,
 		Source:         "tunnel",
 	}
 
-	// If mock response is injected via mutation rule, skip backend
-	if mutReq.MockResponse != nil {
-		entry.StatusCode = mutReq.MockResponse.Status
-		hdr := make(map[string][]string)
-		for k, v := range mutReq.MockResponse.Headers {
-			hdr[k] = []string{v}
-		}
-		entry.ResponseHeaders = hdr
-		entry.ResponseBody = mutReq.MockResponse.Body
+	// If mutation injected a mock response, skip backend forwarding.
+	if mutResult.MockResponse != nil {
+		mock := mutResult.MockResponse
+		entry.StatusCode = mock.StatusCode
+		entry.ResponseHeaders = mock.Headers
+		entry.ResponseBody = mock.Body
 		entry.Duration = time.Since(start)
-
 		a.recorder.Record(entry)
-		a.sendHTTPResponse(frame.RequestID, entry.StatusCode, hdr, entry.ResponseBody)
+		a.sendHTTPResponse(frame.RequestID, mock.StatusCode, mock.Headers, mock.Body)
 		return
 	}
 
 	// 4. Network Simulation
-	simRes := a.simulator.Simulate(mutReq.Method, mutReq.Path)
+	simRes := a.simulator.Simulate(mutReq)
 	if simRes.ShouldDrop {
 		log.Printf("[agent] dropping request to %s (rule: %s)", mutReq.Path, simRes.MatchedRule)
 		return
@@ -279,34 +287,32 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 
 	// 6. Shadow Traffic
 	if a.shadower.TargetCount() > 0 {
-		go a.shadower.Shadow(entry, mutReq.Method, mutReq.Path, mutReq.Query, mutReq.Headers, mutReq.Body)
+		go a.shadower.Shadow(entry, mutReq)
 	}
 
 	// 7. Forward to primary target
-	resp, err := a.proxy.Forward(mutReq.Method, targetURL, mutReq.Headers, mutReq.Body)
+	resp, err := a.proxy.Forward(mutReq, targetURL)
 
-	var outStatus int
-	var outHeaders map[string][]string
-	var outBody []byte
-
+	var proxyResp *traffic.Response
 	if err != nil {
-		outStatus = 502
-		outHeaders = map[string][]string{"Content-Type": {"text/plain"}}
-		outBody = []byte(fmt.Sprintf("Routa: failed to reach local service: %v", err))
+		// Synthesise an error response so the mutation phase still has a consistent type.
+		proxyResp = &traffic.Response{
+			StatusCode: 502,
+			Headers:    map[string][]string{"Content-Type": {"text/plain"}},
+			Body:       []byte(fmt.Sprintf("Routa: failed to reach local service: %v", err)),
+		}
 		entry.Error = err.Error()
 	} else {
-		outStatus = resp.StatusCode
-		outHeaders = resp.Headers
-		outBody = resp.Body
+		proxyResp = resp
 		entry.TimingBreakdown = resp.Timing
 	}
 
-	// 8. Traffic Mutation (Response Phase)
-	mutStatus, mutHeaders, mutBody := a.mutator.ApplyToResponse(mutReq.Method, mutReq.Path, outStatus, outHeaders, outBody)
+	// 8. Traffic Mutation (Response Phase) — mutates proxyResp in-place.
+	a.mutator.ApplyToResponse(mutReq, proxyResp)
 
-	entry.StatusCode = mutStatus
-	entry.ResponseHeaders = mutHeaders
-	entry.ResponseBody = mutBody
+	entry.StatusCode = proxyResp.StatusCode
+	entry.ResponseHeaders = proxyResp.Headers
+	entry.ResponseBody = proxyResp.Body
 	entry.Duration = time.Since(start)
 
 	// Record and log
@@ -319,8 +325,8 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 	log.Printf("[agent] %s %s → %d (%s)",
 		mutReq.Method, parsedPath, entry.StatusCode, entry.Duration.Round(time.Millisecond))
 
-	// Send back to tunnel
-	a.sendHTTPResponse(frame.RequestID, mutStatus, mutHeaders, mutBody)
+	// Send back through the tunnel (convert traffic types back to protocol edge types).
+	a.sendHTTPResponse(frame.RequestID, proxyResp.StatusCode, proxyResp.Headers, proxyResp.Body)
 }
 
 func (a *Agent) sendHTTPResponse(requestID uint32, status int, headers map[string][]string, body []byte) {
@@ -390,7 +396,16 @@ func (a *Agent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Traffic Mutation (Request Phase)
-	mutReq := a.mutator.ApplyToRequest(r.Method, path, query, headers, body)
+	incomingLocalReq := traffic.Request{
+		Method:  r.Method,
+		Path:    path,
+		Query:   query,
+		Headers: headers,
+		Body:    body,
+		Host:    r.Host,
+	}
+	mutResult := a.mutator.ApplyToRequest(incomingLocalReq)
+	mutReq := mutResult.Request
 
 	entry := &recorder.Entry{
 		Timestamp:      start,
@@ -399,30 +414,30 @@ func (a *Agent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Query:          mutReq.Query,
 		RequestHeaders: mutReq.Headers,
 		RequestBody:    mutReq.Body,
-		Host:           r.Host,
+		Host:           mutReq.Host,
 		Source:         "local_proxy",
 	}
 
-	// If mock response is injected via mutation rule, return immediately
-	if mutReq.MockResponse != nil {
-		entry.StatusCode = mutReq.MockResponse.Status
-		hdr := make(map[string][]string)
-		for k, v := range mutReq.MockResponse.Headers {
-			hdr[k] = []string{v}
-			w.Header().Set(k, v)
-		}
-		entry.ResponseHeaders = hdr
-		entry.ResponseBody = mutReq.MockResponse.Body
+	// If mutation injected a mock response, return immediately.
+	if mutResult.MockResponse != nil {
+		mock := mutResult.MockResponse
+		entry.StatusCode = mock.StatusCode
+		entry.ResponseHeaders = mock.Headers
+		entry.ResponseBody = mock.Body
 		entry.Duration = time.Since(start)
-
+		for k, vals := range mock.Headers {
+			for _, v := range vals {
+				w.Header().Add(k, v)
+			}
+		}
 		a.recorder.Record(entry)
-		w.WriteHeader(entry.StatusCode)
-		w.Write(entry.ResponseBody)
+		w.WriteHeader(mock.StatusCode)
+		w.Write(mock.Body)
 		return
 	}
 
 	// 4. Network Simulation
-	simRes := a.simulator.Simulate(mutReq.Method, mutReq.Path)
+	simRes := a.simulator.Simulate(mutReq)
 	if simRes.ShouldDrop {
 		log.Printf("[agent] dropping request to %s (rule: %s)", mutReq.Path, simRes.MatchedRule)
 		return
@@ -452,45 +467,42 @@ func (a *Agent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 6. Shadow Traffic
 	if a.shadower.TargetCount() > 0 {
-		go a.shadower.Shadow(entry, mutReq.Method, mutReq.Path, mutReq.Query, mutReq.Headers, mutReq.Body)
+		go a.shadower.Shadow(entry, mutReq)
 	}
 
 	// 7. Forward to primary target
-	resp, err := a.proxy.Forward(mutReq.Method, targetURL, mutReq.Headers, mutReq.Body)
+	resp, err := a.proxy.Forward(mutReq, targetURL)
 
-	var outStatus int
-	var outHeaders map[string][]string
-	var outBody []byte
-
+	var proxyResp *traffic.Response
 	if err != nil {
-		outStatus = 502
-		outHeaders = map[string][]string{"Content-Type": {"text/plain"}}
-		outBody = []byte(fmt.Sprintf("Routa: failed to reach local service: %v", err))
+		proxyResp = &traffic.Response{
+			StatusCode: 502,
+			Headers:    map[string][]string{"Content-Type": {"text/plain"}},
+			Body:       []byte(fmt.Sprintf("Routa: failed to reach local service: %v", err)),
+		}
 		entry.Error = err.Error()
 	} else {
-		outStatus = resp.StatusCode
-		outHeaders = resp.Headers
-		outBody = resp.Body
+		proxyResp = resp
 		entry.TimingBreakdown = resp.Timing
 	}
 
-	// 8. Traffic Mutation (Response Phase)
-	mutStatus, mutHeaders, mutBody := a.mutator.ApplyToResponse(mutReq.Method, mutReq.Path, outStatus, outHeaders, outBody)
+	// 8. Traffic Mutation (Response Phase) — mutates proxyResp in-place.
+	a.mutator.ApplyToResponse(mutReq, proxyResp)
 
-	entry.StatusCode = mutStatus
-	entry.ResponseHeaders = mutHeaders
-	entry.ResponseBody = mutBody
+	entry.StatusCode = proxyResp.StatusCode
+	entry.ResponseHeaders = proxyResp.Headers
+	entry.ResponseBody = proxyResp.Body
 	entry.Duration = time.Since(start)
 
 	a.recorder.Record(entry)
 
-	for k, vals := range mutHeaders {
+	for k, vals := range proxyResp.Headers {
 		for _, v := range vals {
 			w.Header().Add(k, v)
 		}
 	}
-	w.WriteHeader(mutStatus)
-	w.Write(mutBody)
+	w.WriteHeader(proxyResp.StatusCode)
+	w.Write(proxyResp.Body)
 
 	log.Printf("[agent] %s %s → %d (%s)", mutReq.Method, mutReq.Path, entry.StatusCode, entry.Duration.Round(time.Millisecond))
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/7uyash/routa/config"
 	"github.com/7uyash/routa/recorder"
+	"github.com/7uyash/routa/traffic"
 )
 
 // Shadower duplicates traffic to secondary targets concurrently without blocking
@@ -40,7 +41,7 @@ func (s *Shadower) TargetCount() int {
 // Shadow takes a request intended for the primary target, duplicates it to all
 // shadow targets concurrently, and updates the recorder.Entry with the results
 // once they arrive. This function should be called as a goroutine.
-func (s *Shadower) Shadow(entry *recorder.Entry, method, path, query string, headers map[string][]string, body []byte) {
+func (s *Shadower) Shadow(entry *recorder.Entry, req traffic.Request) {
 	if len(s.targets) == 0 {
 		return
 	}
@@ -54,25 +55,25 @@ func (s *Shadower) Shadow(entry *recorder.Entry, method, path, query string, hea
 			defer wg.Done()
 			start := time.Now()
 
-			fullURL := targetURL + path
-			if query != "" {
-				fullURL += "?" + query
+			fullURL := targetURL + req.Path
+			if req.Query != "" {
+				fullURL += "?" + req.Query
 			}
 
-			req, err := http.NewRequest(method, fullURL, bytes.NewReader(body))
+			httpReq, err := http.NewRequest(req.Method, fullURL, bytes.NewReader(req.Body))
 			if err != nil {
 				results[idx] = recorder.ShadowResult{Target: targetURL, Error: err.Error()}
 				return
 			}
 
 			// Copy headers
-			for k, v := range headers {
+			for k, v := range req.Headers {
 				for _, val := range v {
-					req.Header.Add(k, val)
+					httpReq.Header.Add(k, val)
 				}
 			}
 
-			resp, err := s.client.Do(req)
+			resp, err := s.client.Do(httpReq)
 			if err != nil {
 				results[idx] = recorder.ShadowResult{Target: targetURL, Error: err.Error()}
 				return

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/7uyash/routa/config"
+	"github.com/7uyash/routa/traffic"
 )
 
 func mutRule(name, matchPath, matchMethod string, req config.RequestMutation, resp config.ResponseMutation) config.MutationConfig {
@@ -23,8 +24,8 @@ func TestMutatorSetHeader(t *testing.T) {
 		}, config.ResponseMutation{}),
 	})
 
-	result := m.ApplyToRequest("GET", "/api/users", "", map[string][]string{}, nil)
-	if got := result.Headers["X-Trace-ID"]; len(got) == 0 || got[0] != "test-123" {
+	result := m.ApplyToRequest(traffic.Request{Method: "GET", Path: "/api/users", Headers: map[string][]string{}})
+	if got := result.Request.Headers["X-Trace-ID"]; len(got) == 0 || got[0] != "test-123" {
 		t.Errorf("expected X-Trace-ID: test-123, got %v", got)
 	}
 }
@@ -36,15 +37,19 @@ func TestMutatorRemoveHeader(t *testing.T) {
 		}, config.ResponseMutation{}),
 	})
 
-	result := m.ApplyToRequest("GET", "/public/page", "", map[string][]string{
-		"Authorization": {"Bearer secret"},
-		"Content-Type":  {"text/html"},
-	}, nil)
+	result := m.ApplyToRequest(traffic.Request{
+		Method: "GET",
+		Path:   "/public/page",
+		Headers: map[string][]string{
+			"Authorization": {"Bearer secret"},
+			"Content-Type":  {"text/html"},
+		},
+	})
 
-	if _, ok := result.Headers["Authorization"]; ok {
+	if _, ok := result.Request.Headers["Authorization"]; ok {
 		t.Error("Authorization header should have been removed")
 	}
-	if _, ok := result.Headers["Content-Type"]; !ok {
+	if _, ok := result.Request.Headers["Content-Type"]; !ok {
 		t.Error("Content-Type header should still be present")
 	}
 }
@@ -56,9 +61,9 @@ func TestMutatorStripPathPrefix(t *testing.T) {
 		}, config.ResponseMutation{}),
 	})
 
-	result := m.ApplyToRequest("GET", "/v1/users/123", "", map[string][]string{}, nil)
-	if result.Path != "/users/123" {
-		t.Errorf("path: got %q, want /users/123", result.Path)
+	result := m.ApplyToRequest(traffic.Request{Method: "GET", Path: "/v1/users/123", Headers: map[string][]string{}})
+	if result.Request.Path != "/users/123" {
+		t.Errorf("path: got %q, want /users/123", result.Request.Path)
 	}
 }
 
@@ -70,15 +75,15 @@ func TestMutatorQueryMutation(t *testing.T) {
 		}, config.ResponseMutation{}),
 	})
 
-	result := m.ApplyToRequest("GET", "/search", "q=hello&private=secret", map[string][]string{}, nil)
-	if result.Query == "" {
+	result := m.ApplyToRequest(traffic.Request{Method: "GET", Path: "/search", Query: "q=hello&private=secret", Headers: map[string][]string{}})
+	if result.Request.Query == "" {
 		t.Fatal("query should not be empty")
 	}
-	if !contains(result.Query, "debug=true") {
-		t.Errorf("query %q should contain debug=true", result.Query)
+	if !contains(result.Request.Query, "debug=true") {
+		t.Errorf("query %q should contain debug=true", result.Request.Query)
 	}
-	if contains(result.Query, "private=secret") {
-		t.Errorf("query %q should not contain private=secret", result.Query)
+	if contains(result.Request.Query, "private=secret") {
+		t.Errorf("query %q should not contain private=secret", result.Request.Query)
 	}
 }
 
@@ -90,10 +95,10 @@ func TestMutatorJSONBodyMutation(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]any{"user": map[string]any{"name": "alice", "role": "viewer"}})
-	result := m.ApplyToRequest("POST", "/admin/users", "", map[string][]string{}, body)
+	result := m.ApplyToRequest(traffic.Request{Method: "POST", Path: "/admin/users", Headers: map[string][]string{}, Body: body})
 
 	var out map[string]any
-	if err := json.Unmarshal(result.Body, &out); err != nil {
+	if err := json.Unmarshal(result.Request.Body, &out); err != nil {
 		t.Fatalf("invalid JSON result: %v", err)
 	}
 	user := out["user"].(map[string]any)
@@ -114,12 +119,12 @@ func TestMutatorMockResponse(t *testing.T) {
 		}),
 	})
 
-	result := m.ApplyToRequest("DELETE", "/api/users/1", "", map[string][]string{}, nil)
+	result := m.ApplyToRequest(traffic.Request{Method: "DELETE", Path: "/api/users/1", Headers: map[string][]string{}})
 	if result.MockResponse == nil {
 		t.Fatal("expected MockResponse, got nil")
 	}
-	if result.MockResponse.Status != 403 {
-		t.Errorf("mock status: got %d, want 403", result.MockResponse.Status)
+	if result.MockResponse.StatusCode != 403 {
+		t.Errorf("mock status: got %d, want 403", result.MockResponse.StatusCode)
 	}
 }
 
@@ -130,9 +135,11 @@ func TestMutatorForceStatus(t *testing.T) {
 		}),
 	})
 
-	outStatus, _, _ := m.ApplyToResponse("GET", "/legacy/old", 404, map[string][]string{}, nil)
-	if outStatus != 200 {
-		t.Errorf("force status: got %d, want 200", outStatus)
+	req := traffic.Request{Method: "GET", Path: "/legacy/old"}
+	resp := &traffic.Response{StatusCode: 404, Headers: map[string][]string{}}
+	m.ApplyToResponse(req, resp)
+	if resp.StatusCode != 200 {
+		t.Errorf("force status: got %d, want 200", resp.StatusCode)
 	}
 }
 
@@ -143,8 +150,8 @@ func TestMutatorNoMatch(t *testing.T) {
 		}, config.ResponseMutation{}),
 	})
 
-	result := m.ApplyToRequest("GET", "/health", "", map[string][]string{}, nil)
-	if _, ok := result.Headers["X-API"]; ok {
+	result := m.ApplyToRequest(traffic.Request{Method: "GET", Path: "/health", Headers: map[string][]string{}})
+	if _, ok := result.Request.Headers["X-API"]; ok {
 		t.Error("X-API should not be set on non-matching path")
 	}
 }

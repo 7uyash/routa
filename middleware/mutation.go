@@ -3,10 +3,12 @@ package middleware
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/7uyash/routa/config"
+	"github.com/7uyash/routa/traffic"
 )
 
 // Mutator applies traffic mutation rules to requests and responses.
@@ -33,47 +35,37 @@ func (m *Mutator) Rules() []config.MutationConfig {
 
 // MutatedRequest is the result of applying request mutations.
 type MutatedRequest struct {
-	Method  string
-	Path    string
-	Query   string
-	Headers map[string][]string
-	Body    []byte
+	Request traffic.Request
 	// If non-nil, skip forwarding and return this mock response immediately.
-	MockResponse *MockResponse
-}
-
-// MockResponse represents a canned response returned without touching the local service.
-type MockResponse struct {
-	Status  int
-	Headers map[string]string
-	Body    []byte
+	MockResponse *traffic.Response
 }
 
 // ApplyToRequest applies all matching rules to a request and returns the mutated version.
-func (m *Mutator) ApplyToRequest(method, path, query string, headers map[string][]string, body []byte) MutatedRequest {
+func (m *Mutator) ApplyToRequest(req traffic.Request) MutatedRequest {
 	result := MutatedRequest{
-		Method:  method,
-		Path:    path,
-		Query:   query,
-		Headers: copyHeaders(headers),
-		Body:    body,
+		Request: req,
 	}
+	result.Request.Headers = copyHeaders(req.Headers)
 
 	for _, rule := range m.rules {
-		if !matchesRule(rule.Match, method, path) {
+		if !matchesRule(rule.Match, result.Request.Method, result.Request.Path) {
 			continue
 		}
 
 		// Check for mock response first — if set, short-circuit.
 		if rule.Response.MockStatus != 0 {
-			mockHdrs := rule.Response.MockHeaders
-			if mockHdrs == nil {
-				mockHdrs = map[string]string{"Content-Type": "application/json"}
+			mockHdrs := make(http.Header)
+			if rule.Response.MockHeaders != nil {
+				for k, v := range rule.Response.MockHeaders {
+					mockHdrs.Set(k, v)
+				}
+			} else {
+				mockHdrs.Set("Content-Type", "application/json")
 			}
-			result.MockResponse = &MockResponse{
-				Status:  rule.Response.MockStatus,
-				Headers: mockHdrs,
-				Body:    []byte(rule.Response.MockBody),
+			result.MockResponse = &traffic.Response{
+				StatusCode: rule.Response.MockStatus,
+				Headers:    mockHdrs,
+				Body:       []byte(rule.Response.MockBody),
 			}
 			return result
 		}
@@ -82,34 +74,34 @@ func (m *Mutator) ApplyToRequest(method, path, query string, headers map[string]
 
 		// Set / override headers.
 		for k, v := range req.SetHeaders {
-			result.Headers[k] = []string{v}
+			result.Request.Headers[k] = []string{v}
 		}
 		// Remove headers.
 		for _, k := range req.RemoveHeaders {
-			delete(result.Headers, k)
+			delete(result.Request.Headers, k)
 			// Also try canonical form.
-			delete(result.Headers, http2canonical(k))
+			delete(result.Request.Headers, http2canonical(k))
 		}
 
 		// Path rewrite.
 		if req.StripPathPrefix != "" {
-			result.Path = strings.TrimPrefix(result.Path, req.StripPathPrefix)
-			if result.Path == "" {
-				result.Path = "/"
+			result.Request.Path = strings.TrimPrefix(result.Request.Path, req.StripPathPrefix)
+			if result.Request.Path == "" {
+				result.Request.Path = "/"
 			}
 		}
 		if req.ReplacePath != "" {
-			result.Path = req.ReplacePath
+			result.Request.Path = req.ReplacePath
 		}
 
 		// Query mutation.
 		if len(req.SetQuery) > 0 || len(req.RemoveQuery) > 0 {
-			result.Query = mutateQuery(result.Query, req.SetQuery, req.RemoveQuery)
+			result.Request.Query = mutateQuery(result.Request.Query, req.SetQuery, req.RemoveQuery)
 		}
 
 		// JSON body field mutations.
 		if len(req.SetBodyFields) > 0 {
-			result.Body = mutateJSONBody(result.Body, req.SetBodyFields)
+			result.Request.Body = mutateJSONBody(result.Request.Body, req.SetBodyFields)
 		}
 	}
 
@@ -118,30 +110,24 @@ func (m *Mutator) ApplyToRequest(method, path, query string, headers map[string]
 
 // ApplyToResponse applies all matching rules to a response (headers, status).
 // Returns mutated headers and status code.
-func (m *Mutator) ApplyToResponse(method, path string, status int, headers map[string][]string, body []byte) (int, map[string][]string, []byte) {
-	outStatus := status
-	outHeaders := copyHeaders(headers)
-	outBody := body
-
+func (m *Mutator) ApplyToResponse(req traffic.Request, resp *traffic.Response) {
 	for _, rule := range m.rules {
-		if !matchesRule(rule.Match, method, path) {
+		if !matchesRule(rule.Match, req.Method, req.Path) {
 			continue
 		}
-		resp := rule.Response
+		ruleResp := rule.Response
 
-		for k, v := range resp.SetHeaders {
-			outHeaders[k] = []string{v}
+		for k, v := range ruleResp.SetHeaders {
+			resp.Headers[k] = []string{v}
 		}
-		for _, k := range resp.RemoveHeaders {
-			delete(outHeaders, k)
-			delete(outHeaders, http2canonical(k))
+		for _, k := range ruleResp.RemoveHeaders {
+			delete(resp.Headers, k)
+			delete(resp.Headers, http2canonical(k))
 		}
-		if resp.ForceStatus != 0 {
-			outStatus = resp.ForceStatus
+		if ruleResp.ForceStatus != 0 {
+			resp.StatusCode = ruleResp.ForceStatus
 		}
 	}
-
-	return outStatus, outHeaders, outBody
 }
 
 // --- helpers ---
