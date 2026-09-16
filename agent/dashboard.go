@@ -152,13 +152,6 @@ func (ds *DashboardServer) Start() error {
 			fileServer.ServeHTTP(w, r)
 			return
 		}
-
-		// Forward arbitrary API traffic through the Agent local proxy & inspection engine
-		if ds.agent != nil {
-			ds.agent.ServeHTTP(w, r)
-			return
-		}
-
 		fileServer.ServeHTTP(w, r)
 	})
 
@@ -376,8 +369,9 @@ func (ds *DashboardServer) handleTunnelStatus(w http.ResponseWriter, r *http.Req
 		"request_count":   stats.RequestCount,
 		"reconnect_count": stats.ReconnectCount,
 		"connected_at":    stats.ConnectedAt,
-		"local_target":    ds.cfg.LocalTarget(),
+		"local_target":    ds.agent.router.Match("/"),
 		"dashboard_port":  ds.cfg.DashboardPort,
+		"proxy_url":       ds.agent.ProxyURL(),
 	})
 }
 

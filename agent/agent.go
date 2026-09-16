@@ -128,8 +128,20 @@ func (a *Agent) Start(ctx context.Context) error {
 		}
 	}()
 
+	// Start local proxy server.
+	proxyServer := &http.Server{
+		Addr:    fmt.Sprintf(":%d", a.cfg.ProxyPort),
+		Handler: a,
+	}
+	go func() {
+		if err := proxyServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("[agent] proxy server error: %v", err)
+		}
+	}()
+
 	log.Printf("[agent] dashboard at http://localhost:%d", a.cfg.DashboardPort)
-	log.Printf("[agent] forwarding to default target %s", a.cfg.LocalTarget())
+	log.Printf("[agent] local proxy listening on http://localhost:%d", a.cfg.ProxyPort)
+	log.Printf("[agent] forwarding to target %s", a.cfg.LocalTarget())
 	if a.shadower.TargetCount() > 0 {
 		log.Printf("[agent] shadowing to %d target(s)", a.shadower.TargetCount())
 	}
@@ -153,6 +165,11 @@ func (a *Agent) Stop() {
 // PublicURL returns the assigned public URL (available after connection).
 func (a *Agent) PublicURL() string {
 	return a.tunnel.PublicURL
+}
+
+// ProxyURL returns the local proxy URL.
+func (a *Agent) ProxyURL() string {
+	return fmt.Sprintf("http://localhost:%d", a.cfg.ProxyPort)
 }
 
 // TunnelStats returns current tunnel statistics.

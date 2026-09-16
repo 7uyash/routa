@@ -665,8 +665,18 @@
                 label.textContent = 'Disconnected';
             }
 
-            if (data.public_url) {
-                $('#public-url-text').textContent = data.public_url;
+            if (data.state === 'no_relay') {
+                if ($('#public-url')) $('#public-url').style.display = 'none';
+                if ($('#proxy-url')) {
+                    $('#proxy-url').style.display = 'flex';
+                    $('#proxy-url-text').textContent = data.proxy_url || '—';
+                }
+            } else {
+                if ($('#proxy-url')) $('#proxy-url').style.display = 'none';
+                if ($('#public-url')) $('#public-url').style.display = 'flex';
+                if (data.public_url) {
+                    $('#public-url-text').textContent = data.public_url;
+                }
             }
             // Only update local-target if it's not already set to something else manually by the user
             if (data.local_target !== undefined) {

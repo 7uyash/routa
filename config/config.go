@@ -17,6 +17,7 @@ type Config struct {
 	RelayURL           string `json:"relay_url" yaml:"relay_url"`
 	AuthToken          string `json:"auth_token" yaml:"auth_token"`
 	DashboardPort      int    `json:"dashboard_port" yaml:"dashboard_port"`
+	ProxyPort          int    `json:"proxy_port" yaml:"proxy_port"`
 	MaxRecordedEntries int    `json:"max_recorded_entries" yaml:"max_recorded_entries"`
 	TunnelName         string `json:"tunnel_name" yaml:"tunnel_name"`
 
@@ -43,6 +44,7 @@ func DefaultConfig() Config {
 		LocalHost:          "localhost",
 		RelayURL:           "",
 		DashboardPort:      4040,
+		ProxyPort:          4000,
 		MaxRecordedEntries: 500,
 		RelayPort:          8080,
 		RelayHost:          "0.0.0.0",
@@ -60,6 +62,9 @@ func (c *Config) Validate(mode string) error {
 		}
 		if c.DashboardPort <= 0 || c.DashboardPort > 65535 {
 			return fmt.Errorf("dashboard port must be between 1 and 65535, got %d", c.DashboardPort)
+		}
+		if c.ProxyPort <= 0 || c.ProxyPort > 65535 {
+			return fmt.Errorf("proxy port must be between 1 and 65535, got %d", c.ProxyPort)
 		}
 	case "relay":
 		if c.RelayPort <= 0 || c.RelayPort > 65535 {
@@ -97,6 +102,11 @@ func (c *Config) LoadFromEnv() {
 	if v := os.Getenv("ROUTA_DASHBOARD_PORT"); v != "" {
 		if p, err := strconv.Atoi(v); err == nil {
 			c.DashboardPort = p
+		}
+	}
+	if v := os.Getenv("ROUTA_PROXY_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			c.ProxyPort = p
 		}
 	}
 	if v := os.Getenv("ROUTA_BASIC_AUTH_USER"); v != "" {
