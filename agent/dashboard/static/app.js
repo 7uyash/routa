@@ -250,6 +250,88 @@
 
         const btnAddSim = $('#btn-add-sim');
         if (btnAddSim) btnAddSim.addEventListener('click', () => openModal('sim-modal-overlay'));
+
+        // --- Target Connection Modal ---
+        const targetPill = $('#target-pill');
+        if (targetPill) targetPill.addEventListener('click', openTargetModal);
+
+        setupModalCloseHandlers('target-modal-overlay', 'target-modal-close', 'btn-target-cancel');
+
+        const btnTargetSet = $('#btn-target-set');
+        if (btnTargetSet) {
+            btnTargetSet.addEventListener('click', async () => {
+                const targetUrl = ($('#target-input') || {}).value || '';
+                await setTarget(targetUrl);
+            });
+        }
+
+        const btnTargetClear = $('#btn-target-clear');
+        if (btnTargetClear) {
+            btnTargetClear.addEventListener('click', async () => {
+                await setTarget('');
+            });
+        }
+    }
+
+    async function openTargetModal() {
+        openModal('target-modal-overlay');
+        
+        // Fetch current target
+        try {
+            const r = await fetch('/api/target');
+            const data = await r.json();
+            if ($('#target-input')) $('#target-input').value = data.target || '';
+        } catch(e) {}
+
+        // Fetch discovered services
+        const list = $('#target-discovered-list');
+        if (list) list.innerHTML = '<div class="empty-state" style="padding:16px;">Scanning local ports...</div>';
+        
+        try {
+            const resp = await fetch('/api/discovery/services', { method: 'POST' });
+            const data = await resp.json();
+            const services = data.services || [];
+            
+            if (services.length === 0) {
+                if (list) list.innerHTML = '<div class="empty-state" style="padding:16px;">No local services found.</div>';
+                return;
+            }
+
+            let html = '';
+            for (const s of services) {
+                const url = `http://localhost:${s.port}`;
+                html += `
+                <div class="discovery-card" style="margin-bottom:8px; cursor:pointer;" onclick="document.getElementById('target-input').value='${url}'">
+                    <div class="disc-port">${s.port}</div>
+                    <div class="disc-details">
+                        <div class="disc-url">${url}</div>
+                        <div class="disc-tech">${s.tech || 'HTTP Service'}</div>
+                    </div>
+                </div>`;
+            }
+            if (list) list.innerHTML = html;
+        } catch (e) {
+            if (list) list.innerHTML = '<div class="empty-state" style="padding:16px;">Failed to scan ports.</div>';
+        }
+    }
+
+    async function setTarget(targetUrl) {
+        try {
+            const resp = await fetch('/api/target', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target: targetUrl })
+            });
+            if (resp.ok) {
+                closeModal('target-modal-overlay');
+                $('#local-target').textContent = targetUrl || '—';
+                showToast(targetUrl ? `Connected to ${targetUrl}` : 'Target cleared', 'success');
+            } else {
+                showToast('Failed to set target', 'error');
+            }
+        } catch (e) {
+            showToast('Error: ' + e.message, 'error');
+        }
     }
 
     // ============================================================
@@ -586,8 +668,18 @@
             if (data.public_url) {
                 $('#public-url-text').textContent = data.public_url;
             }
-            if (data.local_target) {
-                $('#local-target').textContent = data.local_target;
+            // Only update local-target if it's not already set to something else manually by the user
+            if (data.local_target !== undefined) {
+                $('#local-target').textContent = data.local_target || '—';
+                
+                // Show modal automatically if no target is set and modal isn't already open
+                if (!data.local_target && $('#target-modal-overlay') && $('#target-modal-overlay').classList.contains('hidden')) {
+                    // Only pop it once per session to avoid annoying the user
+                    if (!window.__targetModalShown) {
+                        window.__targetModalShown = true;
+                        openTargetModal();
+                    }
+                }
             }
             if (data.request_count !== undefined) {
                 $('#request-count').textContent = data.request_count;

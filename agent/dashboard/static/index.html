@@ -33,7 +33,7 @@
                 <span class="stat-label">Requests</span>
                 <span class="stat-value" id="request-count">0</span>
             </div>
-            <div class="stat-pill">
+            <div class="stat-pill clickable" id="target-pill" title="Click to change target">
                 <span class="stat-label">Target</span>
                 <span class="stat-value" id="local-target">—</span>
             </div>
@@ -432,6 +432,36 @@
             <div id="sim-list"></div>
         </div>
     </main>
+
+    <!-- Target Selection Modal -->
+    <div id="target-modal-overlay" class="modal-overlay hidden">
+        <div id="target-modal" class="modal">
+            <div class="modal-header">
+                <h3>Select Local Target</h3>
+                <button id="target-modal-close" class="btn-icon">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="panel-desc" style="margin-bottom:12px;">Choose a running local service to forward traffic to, or enter a custom port.</p>
+                <div class="form-row">
+                    <label>Custom Target (e.g. http://localhost:3000)</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="target-input" placeholder="http://localhost:3000" style="flex:1">
+                        <button id="btn-target-set" class="btn btn-primary">Connect</button>
+                    </div>
+                </div>
+                <div class="form-row" style="margin-top:20px;">
+                    <label>Auto-Discovered Services</label>
+                    <div id="target-discovered-list" class="scenarios-cards-list" style="max-height: 200px; overflow-y: auto;">
+                        <div class="empty-state" style="padding:16px;">Scanning...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: space-between;">
+                <button id="btn-target-clear" class="btn btn-ghost btn-danger">Disconnect Current Target</button>
+                <button id="btn-target-cancel" class="btn btn-ghost">Cancel</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Edit & Replay Modal -->
     <div id="modal-overlay" class="modal-overlay hidden">
