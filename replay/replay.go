@@ -2,8 +2,6 @@
 package replay
 
 import (
-	"time"
-
 	"github.com/7uyash/routa/proxy"
 	"github.com/7uyash/routa/recorder"
 	"github.com/7uyash/routa/traffic"
@@ -11,14 +9,14 @@ import (
 
 // Engine replays recorded requests against a local service.
 type Engine struct {
-	forwarder *proxy.Forwarder
-	rec       *recorder.Recorder
+	executor *Executor
+	rec      *recorder.Recorder
 }
 
 // New creates a replay Engine.
 func New(forwarder *proxy.Forwarder, rec *recorder.Recorder) *Engine {
 	return &Engine{
-		forwarder: forwarder,
+		executor: NewExecutor(forwarder, rec),
 		rec:       rec,
 	}
 }
@@ -31,102 +29,52 @@ func (e *Engine) Replay(entryID, localTarget string) (*recorder.Entry, error) {
 		return nil, ErrNotFound
 	}
 
-	targetURL := localTarget + original.Path
-	if original.Query != "" {
-		targetURL += "?" + original.Query
+	targetURL := BuildTargetURL(localTarget, original.Path, original.Query)
+
+	req := traffic.Request{
+		Method:  original.Method,
+		Path:    original.Path,
+		Query:   original.Query,
+		Headers: original.RequestHeaders,
+		Body:    original.RequestBody,
+		Host:    original.Host,
 	}
 
-	start := time.Now()
-	resp, err := e.forwarder.Forward(
-		traffic.Request{
-			Method:  original.Method,
-			Path:    original.Path,
-			Query:   original.Query,
-			Headers: original.RequestHeaders,
-			Body:    original.RequestBody,
-			Host:    original.Host,
-		},
-		targetURL,
-	)
-
-	entry := &recorder.Entry{
-		Timestamp:      time.Now(),
-		Method:         original.Method,
-		Path:           original.Path,
-		Query:          original.Query,
-		RequestHeaders: original.RequestHeaders,
-		RequestBody:    original.RequestBody,
-		Host:           original.Host,
-		FullURL:        targetURL,
-		IsReplay:       true,
-		OriginalID:     original.ID,
-		Source:         "replay",
-		Tags:           []string{"replay"},
+	opts := ExecuteOptions{
+		Source:     "replay",
+		IsReplay:   true,
+		OriginalID: original.ID,
+		Tags:       []string{"replay"},
+		Host:       original.Host,
+		Record:     true,
 	}
 
-	if err != nil {
-		entry.Error = err.Error()
-		entry.StatusCode = 502
-		entry.Duration = time.Since(start)
-	} else {
-		entry.StatusCode = resp.StatusCode
-		entry.ResponseHeaders = resp.Headers
-		entry.ResponseBody = resp.Body
-		entry.Duration = time.Since(start)
-		entry.TimingBreakdown = resp.Timing
-	}
-
-	e.rec.Record(entry)
-	return entry, nil
+	entry, _, err := e.executor.Execute(req, targetURL, opts)
+	return entry, err
 }
 
 // EditAndReplay sends a modified request to the local service.
 func (e *Engine) EditAndReplay(req EditRequest, localTarget string) (*recorder.Entry, error) {
-	targetURL := localTarget + req.Path
-	if req.Query != "" {
-		targetURL += "?" + req.Query
+	targetURL := BuildTargetURL(localTarget, req.Path, req.Query)
+
+	tfReq := traffic.Request{
+		Method:  req.Method,
+		Path:    req.Path,
+		Query:   req.Query,
+		Headers: req.Headers,
+		Body:    req.Body,
 	}
 
-	start := time.Now()
-	resp, err := e.forwarder.Forward(
-		traffic.Request{
-			Method:  req.Method,
-			Path:    req.Path,
-			Query:   req.Query,
-			Headers: req.Headers,
-			Body:    req.Body,
-		},
-		targetURL,
-	)
-
-	entry := &recorder.Entry{
-		Timestamp:      time.Now(),
-		Method:         req.Method,
-		Path:           req.Path,
-		Query:          req.Query,
-		RequestHeaders: req.Headers,
-		RequestBody:    req.Body,
-		FullURL:        targetURL,
-		IsReplay:       true,
-		OriginalID:     req.OriginalID,
-		Source:         "replay",
-		Tags:           []string{"replay", "edited"},
+	opts := ExecuteOptions{
+		Source:     "replay",
+		IsReplay:   true,
+		OriginalID: req.OriginalID,
+		Tags:       []string{"replay", "edited"},
+		Record:     true,
 	}
 
-	if err != nil {
-		entry.Error = err.Error()
-		entry.StatusCode = 502
-		entry.Duration = time.Since(start)
-	} else {
-		entry.StatusCode = resp.StatusCode
-		entry.ResponseHeaders = resp.Headers
-		entry.ResponseBody = resp.Body
-		entry.Duration = time.Since(start)
-		entry.TimingBreakdown = resp.Timing
-	}
-
-	e.rec.Record(entry)
-	return entry, nil
+	entry, _, err := e.executor.Execute(tfReq, targetURL, opts)
+	return entry, err
 }
 
 // EditRequest describes a modified request for edit-and-replay.

@@ -7,22 +7,21 @@ import (
 
 	"github.com/7uyash/routa/proxy"
 	"github.com/7uyash/routa/recorder"
+	"github.com/7uyash/routa/replay"
 	"github.com/7uyash/routa/traffic"
 )
 
 // PlaybackEngine plays a saved session deterministically.
 type PlaybackEngine struct {
-	store *Store
-	proxy *proxy.Forwarder
-	rec   *recorder.Recorder
+	store    *Store
+	executor *replay.Executor
 }
 
 // NewPlayback creates a new playback engine.
 func NewPlayback(store *Store, p *proxy.Forwarder, r *recorder.Recorder) *PlaybackEngine {
 	return &PlaybackEngine{
-		store: store,
-		proxy: p,
-		rec:   r,
+		store:    store,
+		executor: replay.NewExecutor(p, r),
 	}
 }
 
@@ -77,50 +76,26 @@ func (p *PlaybackEngine) Play(ctx context.Context, opts PlaybackOptions) error {
 		}
 		lastTimestamp = orig.Timestamp
 
-		start := time.Now()
-		fullURL := opts.Target + orig.Path
-		if orig.Query != "" {
-			fullURL += "?" + orig.Query
+		fullURL := replay.BuildTargetURL(opts.Target, orig.Path, orig.Query)
+
+		req := traffic.Request{
+			Method:  orig.Method,
+			Path:    orig.Path,
+			Query:   orig.Query,
+			Headers: orig.RequestHeaders,
+			Body:    orig.RequestBody,
+			Host:    orig.Host,
 		}
 
-		resp, err := p.proxy.Forward(
-			traffic.Request{
-				Method:  orig.Method,
-				Path:    orig.Path,
-				Query:   orig.Query,
-				Headers: orig.RequestHeaders,
-				Body:    orig.RequestBody,
-				Host:    orig.Host,
-			},
-			fullURL,
-		)
-
-		newEntry := &recorder.Entry{
-			Timestamp:      time.Now(),
-			Method:         orig.Method,
-			Path:           orig.Path,
-			Query:          orig.Query,
-			RequestHeaders: orig.RequestHeaders,
-			RequestBody:    orig.RequestBody,
-			Host:           orig.Host,
-			FullURL:        fullURL,
-			Source:         "playback",
-			IsReplay:       true,
-			OriginalID:     orig.ID,
+		execOpts := replay.ExecuteOptions{
+			Source:     "playback",
+			IsReplay:   true,
+			OriginalID: orig.ID,
+			Host:       orig.Host,
+			Record:     true,
 		}
 
-		if err != nil {
-			newEntry.StatusCode = 502
-			newEntry.Error = err.Error()
-		} else {
-			newEntry.StatusCode = resp.StatusCode
-			newEntry.ResponseHeaders = resp.Headers
-			newEntry.ResponseBody = resp.Body
-			newEntry.TimingBreakdown = resp.Timing
-		}
-		newEntry.Duration = time.Since(start)
-
-		p.rec.Record(newEntry)
+		p.executor.Execute(req, fullURL, execOpts)
 	}
 
 	return nil

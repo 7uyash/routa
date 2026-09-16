@@ -12,6 +12,7 @@ import (
 
 	"github.com/7uyash/routa/proxy"
 	"github.com/7uyash/routa/recorder"
+	"github.com/7uyash/routa/replay"
 	"github.com/7uyash/routa/traffic"
 )
 
@@ -131,17 +132,15 @@ type ScenarioExecutionResult struct {
 
 // ScenarioRunner executes saved scenarios.
 type ScenarioRunner struct {
-	store *ScenarioStore
-	proxy *proxy.Forwarder
-	rec   *recorder.Recorder
+	store    *ScenarioStore
+	executor *replay.Executor
 }
 
 // NewScenarioRunner creates a scenario runner.
 func NewScenarioRunner(store *ScenarioStore, p *proxy.Forwarder, r *recorder.Recorder) *ScenarioRunner {
 	return &ScenarioRunner{
-		store: store,
-		proxy: p,
-		rec:   r,
+		store:    store,
+		executor: replay.NewExecutor(p, r),
 	}
 }
 
@@ -213,24 +212,26 @@ func (sr *ScenarioRunner) Replay(ctx context.Context, opts ReplayOptions) (*Scen
 		if baseURL == "" {
 			baseURL = "http://localhost:8080"
 		}
-		baseURL = strings.TrimSuffix(baseURL, "/")
 
-		fullURL := baseURL + renderedPath
-		if renderedQuery != "" {
-			fullURL += "?" + renderedQuery
+		fullURL := replay.BuildTargetURL(baseURL, renderedPath, renderedQuery)
+
+		stepReq := traffic.Request{
+			Method:  step.Method,
+			Path:    renderedPath,
+			Query:   renderedQuery,
+			Headers: renderedHeaders,
+			Body:    []byte(renderedBody),
+		}
+
+		execOpts := replay.ExecuteOptions{
+			Source:   "scenario",
+			IsReplay: true,
+			Tags:     []string{"scenario", scenario.Name},
+			Record:   true,
 		}
 
 		stepStart := time.Now()
-		resp, fwdErr := sr.proxy.Forward(
-			traffic.Request{
-				Method:  step.Method,
-				Path:    renderedPath,
-				Query:   renderedQuery,
-				Headers: renderedHeaders,
-				Body:    []byte(renderedBody),
-			},
-			fullURL,
-		)
+		_, resp, fwdErr := sr.executor.Execute(stepReq, fullURL, execOpts)
 		stepDuration := time.Since(stepStart).Milliseconds()
 
 		stepRes := &StepExecutionResult{
@@ -288,30 +289,6 @@ func (sr *ScenarioRunner) Replay(ctx context.Context, opts ReplayOptions) (*Scen
 				}
 			}
 		}
-
-		// Record replayed entry into inspector recorder
-		recEntry := &recorder.Entry{
-			Timestamp:      time.Now(),
-			Method:         step.Method,
-			Path:           renderedPath,
-			Query:          renderedQuery,
-			RequestHeaders: renderedHeaders,
-			RequestBody:    []byte(renderedBody),
-			FullURL:        fullURL,
-			IsReplay:       true,
-			Source:         "scenario_replay",
-			Duration:       time.Duration(stepDuration) * time.Millisecond,
-			Tags:           []string{"scenario", scenario.Name},
-		}
-		if resp != nil {
-			recEntry.StatusCode = resp.StatusCode
-			recEntry.ResponseHeaders = resp.Headers
-			recEntry.ResponseBody = resp.Body
-		} else if fwdErr != nil {
-			recEntry.StatusCode = 502
-			recEntry.Error = fwdErr.Error()
-		}
-		sr.rec.Record(recEntry)
 
 		execResult.StepResults = append(execResult.StepResults, stepRes)
 		if stepRes.Passed {
