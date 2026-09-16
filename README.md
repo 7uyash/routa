@@ -1,284 +1,296 @@
-<p align="center">
-  <img src="agent/dashboard/static/logo.png" alt="Routa" height="80">
-</p>
+# Routa — Developer Traffic Gateway
 
-<p align="center">
-  <strong>High-Performance Developer Traffic Gateway, Local Tunneling & Inspection Platform in Go.</strong>
-</p>
-
-<p align="center">
-  <a href="https://golang.org"><img src="https://img.shields.io/badge/Go-1.21%2B-00ADD8?style=flat&logo=go" alt="Go Version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
-  <img src="https://img.shields.io/badge/Build-Passing-brightgreen.svg" alt="Build Status">
-</p>
+Routa exposes your local HTTP service to the internet through a WebSocket tunnel, with a built-in dashboard, traffic inspector, mutation engine, fault simulator, shadow traffic, and mock lab — all from a single binary.
 
 ---
 
-**Routa** is a lightweight, all-in-one developer traffic proxy, HTTP inspector, public tunnel gateway, and chaos engineering toolkit. It gives backend developers, API engineers, and frontend teams instant visibility and total control over inbound and outbound HTTP traffic — without needing complex cloud proxy setups.
-
----
-
-## Features
-
-- **Zero-Config Service Discovery** — Automatically scan local ports, detect running HTTP services, suggest friendly names, and propose safe routing rules with user confirmation.
-- **Automatic API Discovery & Mapping** — Watch live traffic in real-time, group endpoints into a visual map, normalize dynamic URL paths (`/users/123` → `/users/{id}`), and display per-endpoint latency and error analytics.
-- **Instant Mock Lab (1-Click Traffic-to-Mock)** — Convert observed captured traffic directly into local mock endpoints with 1-click. Tweak method, path, response status/body, and simulate delays or error cases.
-- **"Connect Anything" Webhook Gateway** — Connect Stripe, GitHub, or any custom third-party provider to your local machine with public endpoints, signature verification options, ON/OFF toggle controls, event history, and a test connection simulator.
-- **Local HTTP Tunneling & Relay** — Expose local HTTP services to the internet via a self-hosted Relay server with automatic WebSocket connection management, multiplexing, heartbeat monitoring, and automatic reconnection.
-- **Live Traffic Inspector** — Embedded web dashboard (`http://localhost:4040`) featuring real-time WebSocket push updates, full request/response headers & body inspection, timing breakdowns, and search/filtering.
-- **Replay & Edit-Replay** — Re-fire any recorded HTTP request with a single click or modify headers, query params, and JSON request bodies inline before re-sending.
-- **Multi-Service Routing** — Declarative pattern matching (`/api/v1/*`, `/auth/*`, `/*`) to route traffic to multiple local backend microservices seamlessly.
-- **Traffic Mutation & Mock Engine** — Inject/strip headers, rewrite URL paths, modify JSON request bodies via dot-path expressions, mock JSON responses, or force HTTP status codes on the fly.
-- **Network & Failure Simulator** — Test application resilience by injecting fixed/jittered latency, simulating connection drops, forcing configurable error rates (e.g. 50% 500 errors), or imposing artificial backend timeouts.
-- **Shadow Traffic & Deep Response Differ** — Forward production/staging traffic asynchronously to a shadow target URL and compare responses side-by-side with deep JSON body diffing.
-- **Session Persistence & Playback** — Export request collections into session fixtures and run deterministic sequential playbacks with preserved inter-request timing.
-
----
-
-## Architecture Overview
+## How it works
 
 ```
-                        PUBLIC INTERNET
-                               |
-                    +---------------------+
-                    |   Routa Relay       |  (Public Edge Server)
-                    +---------------------+
-                               | WebSocket Tunnel (Multiplexed Frames)
-                               |
-                    +---------------------+
-                    |   Routa Agent       |  (Local Machine)
-                    +---------------------+
-             +-------------+-------------+
-             |             |             |
-    +-----------------+ +-----------------+ +-----------------+
-    | Dashboard UI    | | Mutation /      | | Webhook Lab     |
-    | (:4040 SPA)     | | Simulator Pipeline              |
-    +-----------------+ +-----------------+ +-----------------+
-                               |
-                    +---------------------+
-                    |  Local Service      |  (http://127.0.0.1:3000)
-                    +---------------------+
+  Browser / API client
+         |
+  [Relay Server]  ←── runs on a public machine (VPS / cloud)
+         |  WebSocket tunnel
+  [Routa Agent]   ←── runs on your laptop
+         |
+  localhost:3000   ←── your local service
 ```
+
+The **relay** is a lightweight edge server you self-host. The **agent** connects to it and forwards all incoming HTTP requests to your local service. There is no managed cloud — you host both ends.
 
 ---
 
-## Quick Start
+## Installation
 
-### Prerequisites
+### Pre-built binaries
 
-- [Go 1.21+](https://go.dev/dl/) installed.
+| Platform | Binary |
+|----------|--------|
+| macOS (Apple Silicon) | `bin/routa-darwin-arm64` |
+| macOS (Intel) | `bin/routa-darwin-amd64` |
+| Linux ARM64 | `bin/routa-linux-arm64` |
+| Linux AMD64 | `bin/routa-linux-amd64` |
+| Windows AMD64 | `bin/routa-windows-amd64.exe` |
+| Windows ARM64 | `bin/routa-windows-arm64.exe` |
 
-### Installation & Binary Releases
-
-Routa supports **ARM64** and **AMD64** architectures across **macOS (Apple Silicon & Intel)**, **Linux**, and **Windows**.
-
-#### Pre-Built Cross-Platform Executables
-
-Pre-built binaries are available in `./bin` or can be cross-compiled with a single command:
-
-| Platform | Architecture | Binary File |
-| :--- | :--- | :--- |
-| **macOS** (Apple Silicon) | ARM64 | `bin/routa-darwin-arm64` |
-| **macOS** (Intel) | AMD64 | `bin/routa-darwin-amd64` |
-| **Linux** | ARM64 | `bin/routa-linux-arm64` |
-| **Linux** | AMD64 | `bin/routa-linux-amd64` |
-| **Windows** | ARM64 | `bin/routa-windows-arm64.exe` |
-| **Windows** | AMD64 | `bin/routa-windows-amd64.exe` |
-
-### 📦 OS-by-OS Installation & Execution Guide (From Scratch)
-
-#### 🍏 1. macOS (Apple Silicon M1-M4 / Intel)
+**macOS / Linux:**
 ```bash
-# 1. Clone repo & enter directory
 git clone https://github.com/7uyash/routa.git
 cd routa
-
-# 2. Make binary executable
-chmod +x bin/routa-darwin-arm64  # (or routa-darwin-amd64 for Intel)
-
-# 3. Install to system PATH
+chmod +x bin/routa-darwin-arm64        # or your platform binary
 sudo mv bin/routa-darwin-arm64 /usr/local/bin/routa
-
-# 4. Run Routa
-routa dev 3000
 ```
 
-#### 🐧 2. Linux (Ubuntu, Debian, Fedora, Arch, Raspberry Pi)
-```bash
-# 1. Clone repo & enter directory
-git clone https://github.com/7uyash/routa.git
-cd routa
-
-# 2. Make binary executable
-chmod +x bin/routa-linux-arm64   # (or routa-linux-amd64 for x86_64)
-
-# 3. Install to system PATH
-sudo mv bin/routa-linux-arm64 /usr/local/bin/routa
-
-# 4. Run Routa
-routa dev 3000
-```
-
-#### 🪟 3. Windows (PowerShell / Command Prompt)
+**Windows (PowerShell):**
 ```powershell
-# 1. Clone repo & enter directory
 git clone https://github.com/7uyash/routa.git
 cd routa
-
-# 2. Run directly from bin directory
+# Run directly:
 .\bin\routa-windows-amd64.exe dev 3000
-
-# Or install globally to PATH
+# Or install globally:
 Copy-Item .\bin\routa-windows-amd64.exe C:\Windows\System32\routa.exe
-routa dev 3000
 ```
 
-#### 🛠️ 4. Build for All Platforms from Source
+### Build from source
 ```bash
-# On Linux / macOS (using Makefile):
-make build-all
+# Requires Go 1.21+
+go build -o routa ./cmd/routa
 
-# On Windows (using PowerShell):
-.\build.ps1
+# Cross-compile all platforms
+make build-all          # Linux / macOS
+.\build.ps1             # Windows
 ```
+
+---
+
+## Quick start
+
+### Step 1 — Start the relay (on a public server)
+```bash
+routa relay --port 8080 --domain myserver.com:8080
+```
+
+### Step 2 — Expose your local service (on your laptop)
+```bash
+routa dev 3000 --relay ws://myserver.com:8080 --name my-app
+```
+
+Your service is now reachable at `http://my-app.myserver.com:8080`.  
+Dashboard: `http://localhost:4040`
 
 ---
 
 ## Usage
 
-### 1. Dev Mode (Tunnel Local Service)
-
-Forward traffic from a remote Relay to a local HTTP service running on port `3000`:
-
+### Interactive mode (no arguments)
 ```bash
-# Basic usage
+routa
+```
+Shows a terminal UI where you:
+1. Choose **Expose a local service** or **Start a relay server**
+2. For dev mode — auto-discovers running local services and lets you pick one
+3. Configures tunnel name, relay URL, and auth interactively
+
+### Dev mode (expose a local service)
+```bash
+routa dev <port> [flags]
+
+# Shorthand — port only:
+routa 3000
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--relay <url>` | *(required unless set via env)* | Relay WebSocket URL, e.g. `ws://myserver.com:8080` |
+| `--name <name>` | *(random)* | Tunnel name / public subdomain |
+| `--dashboard <port>` | `4040` | Local dashboard port |
+| `--token <token>` | — | Auth token for the relay |
+| `--auth-user <user>` | — | Basic auth username on the public endpoint |
+| `--auth-pass <pass>` | — | Basic auth password on the public endpoint |
+| `--host <host>` | `localhost` | Local host to forward to |
+| `--max-entries <n>` | `500` | Max requests kept in traffic inspector |
+
+**Examples:**
+```bash
 routa dev 3000
-
-# Connect to a custom self-hosted Relay server
-routa dev 3000 --relay ws://relay.example.com:8080 --name my-app
+routa dev 8080 --name api --relay ws://relay.example.com:8080
+routa dev 5173 --token secret123
+routa dev 3000 --auth-user admin --auth-pass secret  # protect the public URL
 ```
 
-**Output:**
-```text
-  Routa - Traffic Gateway
-
-  Local target:  http://127.0.0.1:3000
-  Dashboard:     http://localhost:4040
-
-  Public URL:    http://my-app.relay.example.com:8080
-  Subdomain:     my-app
-```
-
-Open `http://localhost:4040` in your browser to launch the **Routa Dashboard**.
-
----
-
-### 2. Relay Mode (Self-Hosted Edge Server)
-
-Run a public relay edge server to terminate incoming web requests and tunnel them to connected agents:
-
+### Relay mode (run the edge server)
 ```bash
-routa relay --port 8080 --domain relay.example.com:8080 --secret your-optional-auth-token
+routa relay [flags]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port <port>` | `8080` | Port to listen on |
+| `--host <host>` | `0.0.0.0` | Host to bind to |
+| `--domain <domain>` | `localhost` | Base domain for subdomains |
+
+**Example:**
+```bash
+routa relay --port 8080 --domain relay.example.com:8080
+```
+
+### Other commands
+```bash
+routa version     # Print version (v0.1.0)
+routa help        # Print usage
+routa --help
+routa -h
 ```
 
 ---
 
-### 3. Declarative Config (`routa.yaml`)
+## Config file (routa.yaml)
 
-Define multi-service routes, mutation rules, fault injection, and shadow targets declaratively:
+Place `routa.yaml` in your project directory. It is automatically loaded at startup and overrides CLI flags.
 
 ```yaml
-version: "1"
-agent:
-  port: 4040
-  target: "http://localhost:3000"
+tunnel:
+  port: 3000
+  relay_url: "ws://myserver.com:8080"
+  name: "my-app"
+  dashboard_port: 4040
+  auth_token: ""
+  basic_auth_user: ""
+  basic_auth_pass: ""
 
 routes:
-  - path: "/api/v1/users/*"
+  - pattern: "/api/users/*"
     target: "http://localhost:8081"
-  - path: "/api/v1/payments/*"
+    name: "users-service"
+  - pattern: "/api/payments/*"
     target: "http://localhost:8082"
+    name: "payments-service"
 
 mutations:
-  - name: "Inject Debug Header"
+  - name: "Inject debug header"
     match:
       path: "/api/*"
+      method: "GET"
     request:
       set_headers:
-        X-Debug-Mode: "true"
+        X-Debug: "true"
       remove_headers:
         - "X-Internal-Token"
+      strip_path_prefix: "/api/v1"
+      set_query:
+        debug: "true"
+      remove_query:
+        - "secret"
+      set_body_fields:
+        "user.role": '"admin"'
+    response:
+      set_headers:
+        X-Served-By: "routa"
+      force_status: 200
+
+  - name: "Block DELETE requests"
+    match:
+      method: "DELETE"
+    response:
+      mock_status: 403
+      mock_body: '{"error":"not allowed"}'
+      mock_headers:
+        Content-Type: "application/json"
 
 simulations:
-  - name: "Staging Latency & Error Test"
+  - name: "Slow payments"
     match:
-      path: "/api/v1/payments/*"
-    latency_ms: 250
+      path: "/api/payments/*"
+    delay_ms: 300
     jitter_ms: 50
-    error_rate: 0.1
+    error_rate: 0.05
     error_status: 503
+    drop: false
 
-shadows:
-  - name: "Canary Testing"
-    match:
-      path: "/api/v1/search"
-    shadow_url: "http://localhost:9090"
-    compare_response: true
-```
+shadow:
+  enabled: true
+  targets:
+    - "http://localhost:3001"
 
-Run with configuration:
-
-```bash
-routa dev --config routa.yaml
+recording:
+  enabled: true
+  max_entries: 1000
+  redact_headers:
+    - "Authorization"
+    - "Cookie"
+  redact_body_fields:
+    - "user.password"
+  exclude_paths:
+    - "/health"
+    - "/metrics"
 ```
 
 ---
 
-## Documentation
+## Dashboard (http://localhost:4040)
 
-Detailed documentation is available in the root and [`docs/`](./docs) directory:
+The local dashboard gives you:
 
-- [**About Routa**](./about.md) — Overview of what Routa is, core capabilities, architecture, and practical use cases with examples.
-- [**User Guide**](./docs/USAGE.md) — Comprehensive guide on CLI commands, dashboard features, webhook lab, mutation rules, simulations, and playback.
-- [**Configuration Reference**](./docs/CONFIGURATION.md) — Complete `routa.yaml` schema documentation.
-- [**Contributing Guide**](./docs/CONTRIBUTING.md) — Architecture breakdown, package layout, dev setup, and pull request guidelines.
+- **Traffic Inspector** — Live feed of all requests/responses with headers, bodies, and timing
+- **Replay** — Re-send any captured request; edit method/path/headers/body before replaying
+- **Mutation Rules** — Add/edit/remove request & response mutation rules at runtime
+- **Network Simulator** — Inject latency, jitter, error rates, and connection drops per path
+- **Mock Lab** — Define HTTP endpoints that return fixed responses without touching your service
+- **Webhook Lab** — Receive and inspect incoming webhooks
+- **Shadow Traffic** — Mirror traffic to secondary targets and diff responses
+- **Service Discovery** — See all detected local services and their tech stack
+- **Route Manager** — Configure path-based routing to multiple local services
+- **Session Recorder** — Record request collections and play them back deterministically
+- **Scenario Runner** — Run multi-step request sequences with variable extraction and assertions
 
 ---
 
-## Project Structure
+## Environment variables
 
-| Directory | Description |
-|-----------|-------------|
-| [`agent/`](./agent) | Local agent daemon, embedded Web Dashboard, REST API & WebSocket handlers |
-| [`cli/`](./cli) | CLI argument parsing, flags, terminal UI, and banner rendering |
-| [`cmd/routa/`](./cmd/routa) | Application entry point (`main.go`) |
-| [`config/`](./config) | Configuration models, environment variable binding, & YAML parser |
-| [`diff/`](./diff) | HTTP response comparator & deep JSON body differ |
-| [`middleware/`](./middleware) | Traffic mutation, mock response, & fault simulation middleware |
-| [`protocol/`](./protocol) | Binary wire format framing & JSON message payloads |
-| [`proxy/`](./proxy) | Forwarding HTTP proxy engine with timing & header normalization |
-| [`recorder/`](./recorder) | High-performance in-memory ring buffer for traffic history |
-| [`relay/`](./relay) | Edge Relay server & agent connection registry |
-| [`replay/`](./replay) | Request replay and edit-replay execution engine |
-| [`router/`](./router) | Pattern-based HTTP request routing engine |
-| [`shadow/`](./shadow) | Shadow traffic forwarder & dual-target execution |
-| [`storage/`](./storage) | Session persistence (JSON fixtures) & deterministic playback runner |
-| [`tunnel/`](./tunnel) | Persistent WebSocket tunnel client with reconnect & ping/pong |
-| [`webhook/`](./webhook) | Webhook lab, provider detector, & delivery history tracker |
+All config can be set via environment variables:
+
+| Variable | Config field |
+|----------|-------------|
+| `ROUTA_LOCAL_PORT` | Local port to forward to |
+| `ROUTA_RELAY_URL` | Relay WebSocket URL |
+| `ROUTA_AUTH_TOKEN` | Auth token |
+| `ROUTA_DASHBOARD_PORT` | Dashboard port |
+| `ROUTA_TUNNEL_NAME` | Tunnel name |
+| `ROUTA_BASIC_AUTH_USER` | Basic auth username |
+| `ROUTA_BASIC_AUTH_PASS` | Basic auth password |
+| `ROUTA_BASE_DOMAIN` | Relay base domain |
+| `ROUTA_RELAY_PORT` | Relay listen port |
+| `ROUTA_DATA_DIR` | Data directory (default: `~/.routa`) |
+
+---
+
+## Local service discovery
+
+When running in interactive mode (`routa` or `routa dev` with no port), Routa scans these ports for active HTTP services:
+
+`3000, 3001, 3002, 4000, 4200, 5000, 5001, 5173, 8000, 8001, 8080, 8081, 8082, 8088, 8888, 9000, 9090, 9091`
+
+It identifies tech stacks from response headers (Express, Next.js, FastAPI, Spring Boot, Vite, etc.) and shows them in a pick-list.
+
+---
+
+## Data storage
+
+Sessions and scenarios are stored in `~/.routa/` (or `ROUTA_DATA_DIR`).
+
+```
+~/.routa/
+  sessions/   ← recorded traffic sessions
+```
 
 ---
 
 ## Testing
 
-Run all unit tests across packages:
-
 ```bash
-go test -v ./...
-```
-
-Run static analysis:
-
-```bash
+go test ./...
 go vet ./...
 ```
 
@@ -286,4 +298,4 @@ go vet ./...
 
 ## License
 
-Routa is open-source software licensed under the [MIT License](LICENSE).
+MIT

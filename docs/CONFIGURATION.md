@@ -1,150 +1,158 @@
-# ⚙️ Routa — Configuration Reference
+# Routa Configuration Reference
 
-Routa can be configured using a `routa.yaml` or `routa.yml` file passed via the `--config` / `-c` flag.
-
-```bash
-routa dev --config routa.yaml
-```
+All configuration comes from three sources, applied in this priority order:
+1. **Environment variables** (highest)
+2. **CLI flags**
+3. **`routa.yaml`** (project config file)
+4. **Defaults** (lowest)
 
 ---
 
-## Example `routa.yaml`
+## CLI flags
+
+### Dev mode (`routa dev <port>`)
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--relay <url>` | string | `""` | Relay WebSocket URL (`ws://` or `wss://`) |
+| `--name <name>` | string | `""` | Tunnel name / public subdomain |
+| `--dashboard <port>` | int | `4040` | Local dashboard port |
+| `--token <token>` | string | `""` | Auth token for the relay |
+| `--auth-user <user>` | string | `""` | Basic auth username on the public endpoint |
+| `--auth-pass <pass>` | string | `""` | Basic auth password on the public endpoint |
+| `--host <host>` | string | `localhost` | Local host to forward to |
+| `--max-entries <n>` | int | `500` | Max traffic inspector entries |
+
+### Relay mode (`routa relay`)
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--port <port>` | int | `8080` | Port to listen on |
+| `--host <host>` | string | `0.0.0.0` | Host/interface to bind |
+| `--domain <domain>` | string | `localhost` | Base domain for subdomains |
+
+---
+
+## Environment variables
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `ROUTA_LOCAL_PORT` | int | Port of the local service to tunnel |
+| `ROUTA_RELAY_URL` | string | Relay WebSocket URL |
+| `ROUTA_AUTH_TOKEN` | string | Auth token for the relay |
+| `ROUTA_DASHBOARD_PORT` | int | Dashboard listen port |
+| `ROUTA_TUNNEL_NAME` | string | Tunnel name / subdomain |
+| `ROUTA_BASIC_AUTH_USER` | string | Basic auth username |
+| `ROUTA_BASIC_AUTH_PASS` | string | Basic auth password |
+| `ROUTA_BASE_DOMAIN` | string | Relay base domain |
+| `ROUTA_RELAY_PORT` | int | Relay listen port |
+| `ROUTA_DATA_DIR` | string | Data directory (default: `~/.routa`) |
+
+---
+
+## routa.yaml schema
 
 ```yaml
-version: "1"
-
-agent:
-  port: 4040
-  target: "http://localhost:3000"
-  relay_url: "ws://localhost:8080"
-  subdomain: "my-service"
-  secret: "my-secret-token"
+tunnel:
+  port: 3000                          # int — local service port
+  relay_url: "ws://host:8080"         # string — relay WebSocket URL
+  name: "my-app"                      # string — tunnel name / subdomain
+  dashboard_port: 4040                # int — local dashboard port
+  auth_token: ""                      # string — relay auth token
+  basic_auth_user: ""                 # string — public endpoint basic auth user
+  basic_auth_pass: ""                 # string — public endpoint basic auth pass
 
 routes:
-  - path: "/api/v1/auth/*"
-    target: "http://localhost:8081"
-  - path: "/api/v1/payments/*"
-    target: "http://localhost:8082"
-  - path: "/*"
-    target: "http://localhost:3000"
+  - pattern: "/api/users/*"           # string — path glob
+    target: "http://localhost:8081"   # string — local target URL
+    name: "users-service"             # string — optional label
 
 mutations:
-  - name: "Inject Internal Headers"
+  - name: "rule name"                 # string
     match:
-      path: "/api/*"
-      method: "POST"
+      path: "/api/*"                  # string — path glob, empty = all
+      method: "GET"                   # string — HTTP method, empty = all
     request:
-      set_headers:
-        X-Gateway: "Routa"
-      remove_headers:
-        - "X-Unwanted-Header"
-      strip_path_prefix: "/api/v1"
-      add_query_params:
-        debug: "1"
-      set_body_json:
-        "metadata.processed_by": "routa-gateway"
-      remove_body_json:
-        - "internal_ssn"
-
-  - name: "Mock Maintenance Status"
-    match:
-      path: "/api/v1/maintenance"
-    request:
-      mock_response:
-        status: 503
-        body: '{"error": "Service under scheduled maintenance"}'
+      set_headers:                    # map[string]string
+        X-My-Header: "value"
+      remove_headers:                 # []string
+        - "Authorization"
+      strip_path_prefix: "/api/v1"    # string — strip this prefix from path
+      replace_path: "/new/path"       # string — replace entire path
+      set_query:                      # map[string]string
+        debug: "true"
+      remove_query:                   # []string
+        - "token"
+      set_body_fields:                # map[string]string — dot-notation → JSON value
+        "user.role": '"admin"'
+    response:
+      set_headers:                    # map[string]string
+        X-Served-By: "routa"
+      remove_headers:                 # []string
+        - "X-Internal"
+      force_status: 200               # int — override response status code
+      mock_status: 403                # int — return this status without forwarding
+      mock_body: '{"error":"no"}'     # string — mock response body
+      mock_headers:                   # map[string]string — mock response headers
+        Content-Type: "application/json"
 
 simulations:
-  - name: "Payment Latency & Error Injection"
+  - name: "slow payments"             # string
     match:
-      path: "/api/v1/payments/*"
-      method: "POST"
-    latency_ms: 300
-    jitter_ms: 50
-    error_rate: 0.05
-    error_status: 500
-    drop_rate: 0.01
+      path: "/api/payments/*"         # string — path glob
+      method: ""                      # string — HTTP method, empty = all
+    delay_ms: 300                     # int — fixed delay in milliseconds
+    jitter_ms: 50                     # int — random ±jitter added to delay
+    bandwidth_bps: 0                  # int — throttle bytes/sec, 0 = unlimited
+    error_rate: 0.1                   # float — fraction of requests to inject error (0.0–1.0)
+    error_status: 503                 # int — status code to inject
+    timeout_ms: 0                     # int — kill forwarding after this many ms
+    drop: false                       # bool — silently drop connection (no response)
 
-shadows:
-  - name: "Search Engine Migration Shadow"
-    match:
-      path: "/api/v1/search"
-    shadow_url: "http://localhost:9090"
-    compare_response: true
+shadow:
+  enabled: true                       # bool
+  targets:                            # []string
+    - "http://localhost:3001"
+
+recording:
+  enabled: true                       # bool
+  max_entries: 500                    # int — max entries in traffic inspector
+  redact_headers:                     # []string — headers to blank out in recordings
+    - "Authorization"
+    - "Cookie"
+  redact_body_fields:                 # []string — dot-path JSON fields to blank out
+    - "user.password"
+  exclude_paths:                      # []string — paths never recorded
+    - "/health"
+    - "/metrics"
 ```
 
 ---
 
-## Schema Specification
+## Path matching
 
-### 1. `agent` Section
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `port` | `int` | `4040` | Port for the embedded Web Dashboard REST API & UI. |
-| `target` | `string` | `http://localhost:3000` | Default HTTP target URL for proxied requests. |
-| `relay_url` | `string` | `ws://localhost:8080` | Edge Relay WebSocket endpoint URL. |
-| `subdomain` | `string` | `""` | Desired subdomain requested on the edge Relay. |
-| `secret` | `string` | `""` | Authentication secret token for Relay connection. |
+Paths use suffix glob matching:
+- `/api/*` — matches `/api/users`, `/api/users/123`, etc.
+- `/health` — exact match only
+- `""` (empty) — matches all paths
 
 ---
 
-### 2. `routes` Section
+## Mutation rule evaluation
 
-List of pattern-matching route rules evaluated in sequential order:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `path` | `string` | URL path pattern (`/exact`, `/prefix/*`, `/*`). |
-| `target` | `string` | Target backend HTTP base URL (e.g. `http://localhost:8081`). |
+- Rules are evaluated **in order** (first match wins for mock responses; all matching rules apply for header mutations)
+- `mock_status` on a response rule **short-circuits** forwarding — the request never reaches your local service
+- Request mutations are applied **before** forwarding; response mutations after
 
 ---
 
-### 3. `mutations` Section
+## Data directory
 
-List of request/response mutation and mock rules:
+Default: `~/.routa/`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | `string` | Descriptive label for the mutation rule. |
-| `match.path` | `string` | URL path pattern to match. |
-| `match.method` | `string` | HTTP method filter (`GET`, `POST`, `*`). |
-| `request.set_headers` | `map[string]string` | Key-value pairs of request headers to inject/override. |
-| `request.remove_headers` | `[]string` | List of header keys to strip from request. |
-| `request.strip_path_prefix` | `string` | Path prefix to strip before forwarding to target. |
-| `request.add_query_params` | `map[string]string` | Query string key-values to append to URL. |
-| `request.set_body_json` | `map[string]string` | Dot-path key-value assignments for JSON body (`"user.role": "admin"`). |
-| `request.remove_body_json` | `[]string` | Dot-path JSON body keys to delete (`"user.ssn"`). |
-| `request.mock_response.status` | `int` | Force HTTP response status code without contacting target. |
-| `request.mock_response.body` | `string` | Return raw JSON/string response body. |
+```
+~/.routa/
+  sessions/     ← recorded traffic sessions (JSON files)
+```
 
----
-
-### 4. `simulations` Section
-
-List of chaos & fault injection simulation rules:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | `string` | Descriptive label for the simulation rule. |
-| `match.path` | `string` | URL path pattern to match. |
-| `match.method` | `string` | HTTP method filter. |
-| `latency_ms` | `int` | Base artificial delay in milliseconds. |
-| `jitter_ms` | `int` | Random variance range for latency in milliseconds. |
-| `error_rate` | `float` | Probability of returning simulated error (`0.0` to `1.0`). |
-| `error_status` | `int` | HTTP status code for generated errors (default `500`). |
-| `drop_rate` | `float` | Probability of terminating connection immediately (`0.0` to `1.0`). |
-| `timeout_ms` | `int` | Maximum request duration before timing out. |
-
----
-
-### 5. `shadows` Section
-
-List of shadow traffic rules:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | `string` | Descriptive label for shadow test. |
-| `match.path` | `string` | URL path pattern to match. |
-| `shadow_url` | `string` | Secondary HTTP target base URL to receive duplicated traffic. |
-| `compare_response` | `bool` | Whether to run deep response differ and record comparison results. |
+Override with `ROUTA_DATA_DIR` or the `data_dir` config field.

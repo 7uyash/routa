@@ -1,216 +1,248 @@
-# 📖 Routa — User Guide
+# Routa Usage Guide
 
-This guide covers everything you need to know to get started with Routa, from CLI commands to advanced features like traffic mutation, fault simulation, webhook testing, and deterministic playback.
+## Running Routa
 
----
+### Interactive mode (recommended for first time)
 
-## Table of Contents
+Run with no arguments — Routa presents a terminal UI:
 
-1. [Getting Started](#getting-started)
-2. [CLI Reference](#cli-reference)
-3. [Web Dashboard & Inspector](#web-dashboard--inspector)
-4. [Replay & Edit-Replay](#replay--edit-replay)
-5. [Webhook Testing Lab](#webhook-testing-lab)
-6. [Multi-Service Routing](#multi-service-routing)
-7. [Traffic Mutation & Mocking](#traffic-mutation--mocking)
-8. [Network Failure Simulation](#network-failure-simulation)
-9. [Shadow Traffic & Response Diffing](#shadow-traffic--response-diffing)
-10. [Session Storage & Deterministic Playback](#session-storage--deterministic-playback)
-
----
-
-## 🚀 1-Minute Quick Start (First-Time Users)
-
-If someone wants to use Routa on their machine for the first time, here are the **3 simplest steps**:
-
-### Step 1: Install Routa
-Run this command in your terminal (requires Go 1.21+):
 ```bash
-go install github.com/7uyash/routa/cmd/routa@latest
-```
-*(Or download pre-compiled `routa.exe` directly from GitHub Releases).*
-
-### Step 2: Start Routa with your app's port
-If your local backend app (e.g. Node.js, Python, Go, Java) is running on port **`3000`**, start Routa:
-```bash
-routa dev 3000
+routa
 ```
 
-### Step 3: Open the Dashboard
-Open your browser to:
-👉 **`http://localhost:4040`**
-
-That's it! Every request sent to your local app will now appear live in the Routa Dashboard with full headers, body, timing, and 1-click request replay.
-
----
-
-## ⚡ Modes of Operation
-
-### Mode 1: Local Traffic Inspector (Default)
-When you run `routa dev 3000`, Routa acts as a high-performance local proxy and inspector for port 3000. It opens the Web Dashboard on port `4040` with 0 external setup needed.
-
-### Mode 2: Public Tunneling Gateway (Expose Local App)
-If you want to expose your local server to the internet or test external webhooks via a public URL:
-
-1. In Terminal 1, start the Relay edge server:
-   ```bash
-   routa relay
-   ```
-2. In Terminal 2, start Routa pointing to the relay:
-   ```bash
-   routa dev 3000 --relay ws://localhost:8080
-   ```
-
-## CLI Reference
-
-Routa provides a clean CLI with intuitive commands and environment variable overrides.
-
-### Commands
-
-| Command | Description | Example |
-|---------|-------------|---------|
-| `routa dev <port>` | Expose local port & launch Dashboard | `routa dev 3000` |
-| `routa relay` | Launch public edge Relay server | `routa relay --port 8080` |
-| `routa version` | Print version and system information | `routa version` |
-| `routa help` | Show CLI help text | `routa help` |
-
-### Command Options (`routa dev`)
-
-| Flag | Env Variable | Default | Description |
-|------|--------------|---------|-------------|
-| `--target`, `-t` | `ROUTA_TARGET` | `http://localhost:<port>` | Local target URL |
-| `--dashboard-port` | `ROUTA_DASHBOARD_PORT` | `4040` | Dashboard port |
-| `--relay` | `ROUTA_RELAY_URL` | `ws://localhost:8080` | Edge Relay WebSocket URL |
-| `--name`, `-n` | `ROUTA_SUBDOMAIN` | Auto-generated | Requested subdomain on Relay |
-| `--secret` | `ROUTA_SECRET` | `""` | Auth secret token for Relay |
-| `--config`, `-c` | `ROUTA_CONFIG` | `""` | Path to YAML config (`routa.yaml`) |
-
-### Command Options (`routa relay`)
-
-| Flag | Env Variable | Default | Description |
-|------|--------------|---------|-------------|
-| `--port`, `-p` | `ROUTA_RELAY_PORT` | `8080` | HTTP/WS listen port |
-| `--domain`, `-d` | `ROUTA_RELAY_DOMAIN` | `localhost:8080` | Base domain for agent subdomains |
-| `--secret` | `ROUTA_SECRET` | `""` | Auth secret required for agent connections |
+1. Pick **Expose a local service** or **Start a relay server**
+2. For dev mode: Routa scans your machine for running HTTP services and shows a list — pick one or enter a port manually
+3. Fill in tunnel name, relay URL, and auth (all optional)
+4. Confirm to start
 
 ---
 
-## Web Dashboard & Inspector
+## Dev mode — exposing a local service
 
-When running `routa dev`, the embedded Web Dashboard starts at `http://localhost:4040`.
+```bash
+routa dev <port> [flags]
+```
 
-### Features
-- **Live Stream**: Inbound requests stream in real time over WebSockets with zero page refresh.
-- **Request Filter**: Search by keyword or filter by HTTP method (`GET`, `POST`, `PUT`, `DELETE`), HTTP status (`2xx`, `4xx`, `5xx`), or request type (Normal vs Replay).
-- **Split-View Detail Inspector**: Select any request to inspect:
-  - **Headers**: Full raw request and response headers.
-  - **Body**: Pretty-printed JSON, Form data, or plain text.
-  - **Timing Breakdown**: Visual breakdown of duration and proxy processing time.
-  - **Diff View**: Compare the primary response against shadow target responses.
+The port can also come before or instead of `dev`:
+```bash
+routa 3000           # shorthand — same as routa dev 3000
+routa dev            # interactive service picker
+routa dev 3000       # direct
+```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--relay <url>` | *(empty — relay required)* | Relay WebSocket URL (`ws://` or `wss://`) |
+| `--name <name>` | *(empty)* | Tunnel name used as public subdomain |
+| `--dashboard <port>` | `4040` | Port for the local dashboard |
+| `--token <token>` | *(empty)* | Auth token sent to the relay |
+| `--auth-user <user>` | *(empty)* | Basic auth username on the public endpoint |
+| `--auth-pass <pass>` | *(empty)* | Basic auth password on the public endpoint |
+| `--host <host>` | `localhost` | Local hostname to forward to |
+| `--max-entries <n>` | `500` | Max entries kept in the traffic inspector |
+
+### Examples
+
+```bash
+# Simplest — tunnel port 3000
+routa dev 3000 --relay ws://my-vps.com:8080
+
+# Custom tunnel name → http://my-api.my-vps.com:8080
+routa dev 3000 --relay ws://my-vps.com:8080 --name my-api
+
+# Password-protect the public URL
+routa dev 3000 --relay ws://my-vps.com:8080 --auth-user admin --auth-pass secret
+
+# Token auth for the relay
+routa dev 3000 --relay ws://my-vps.com:8080 --token relay-secret
+
+# Custom local host (if service listens on 0.0.0.0)
+routa dev 8080 --host 0.0.0.0 --relay ws://my-vps.com:8080
+
+# Dashboard on a different port
+routa dev 3000 --relay ws://my-vps.com:8080 --dashboard 5000
+```
+
+### What you get
+
+After starting, open **http://localhost:4040** (or your `--dashboard` port) in a browser.
 
 ---
 
-## Replay & Edit-Replay
+## Relay mode — running the edge server
 
-Routa allows you to re-execute any captured request without relying on external tools like curl or Postman.
+Run this on a public VPS or server:
 
-1. **Replay Exact Request**: Click **Replay** on any captured request detail panel. The exact headers, query parameters, and body are re-sent.
-2. **Edit & Replay**: Click **Edit & Replay** to open an interactive modal:
-   - Change the HTTP method or URL path.
-   - Add, edit, or delete request headers.
-   - Modify the JSON payload directly in an embedded editor.
-   - Click **Send Request** to execute. New replayed entries are tagged with a `Replay` badge and linked to their original parent request ID.
+```bash
+routa relay [flags]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port <port>` | `8080` | Port to listen on |
+| `--host <host>` | `0.0.0.0` | Host/interface to bind to |
+| `--domain <domain>` | `localhost` | Base domain — subdomains are `<name>.<domain>` |
+
+### Examples
+
+```bash
+# Basic relay
+routa relay --port 8080 --domain myserver.com:8080
+
+# Bind to specific interface
+routa relay --port 443 --host 0.0.0.0 --domain api.mycompany.com
+
+# Local-only relay (for testing)
+routa relay --port 8080 --domain localhost:8080
+```
 
 ---
 
-## Webhook Testing Lab
+## Dashboard features (http://localhost:4040)
 
-Test webhooks locally without exposing public endpoints or manually parsing provider signatures.
+### Traffic Inspector
+Live table of all requests passing through the tunnel. Click any row to see full request/response headers, body, and timing breakdown.
 
-1. Open the **Webhook Lab** tab in the dashboard.
-2. Click **Create Endpoint** to generate a unique endpoint URL (e.g. `http://<subdomain>.relay:8080/webhook/wh_abc123`).
-3. Point your third-party provider (GitHub, Stripe, Shopify, Discord, Slack, etc.) to this URL.
-4. Routa automatically detects the provider signature header, verifies payload structure, and logs delivery timestamps.
+### Request Replay
+Re-send any captured request exactly as it was. Or click **Edit & Replay** to modify the method, path, headers, or body first.
+
+### Mutation Rules
+Add rules that transform requests or responses in-flight — no code changes needed:
+- Add/remove/override request or response **headers**
+- **Strip** or **replace** path prefixes
+- Add/remove **query parameters**
+- Mutate **JSON body fields** (dot-notation path)
+- Return a **mock response** (skip forwarding entirely)
+- Force a specific **response status code**
+
+### Network Simulator
+Inject faults per path pattern:
+- **Delay** — fixed milliseconds + random jitter
+- **Error rate** — inject HTTP error status at a percentage of requests
+- **Drop** — silently drop the connection (no response)
+- **Timeout** — cap how long forwarding waits
+
+### Mock Lab
+Define endpoints that return fixed responses without touching your service. Useful for stubbing dependencies you don't control.
+
+### Webhook Lab
+Receive and inspect incoming webhooks. Routa detects providers (GitHub, Stripe, etc.) from headers and formats the payload.
+
+### Shadow Traffic
+Mirror every request to one or more secondary targets concurrently. Routa compares primary vs shadow responses and shows diffs in the inspector.
+
+### Route Manager
+Configure path-based routing to multiple local services:
+- `/api/users/*` → `localhost:8081`
+- `/api/payments/*` → `localhost:8082`
+- Everything else → `localhost:3000`
+
+### Service Discovery
+Routa scans these ports on startup for active HTTP services:
+`3000, 3001, 3002, 4000, 4200, 5000, 5001, 5173, 8000, 8001, 8080, 8081, 8082, 8088, 8888, 9000, 9090, 9091`
+
+Tech stacks are inferred from response headers (Express, Next.js, FastAPI, Vite, Spring Boot, etc.).
+
+### Session Recorder
+Record a named collection of requests while you use your app, then play it back deterministically — with the same inter-request timing.
+
+### Scenario Runner
+Run multi-step request sequences:
+- Template variables in paths, headers, and bodies (`{{USER_ID}}`)
+- Extract values from responses into variables (JSON path, header, regex)
+- Assert status codes, body content, or JSON field values
+- Pass/fail report per step
 
 ---
 
-## Multi-Service Routing
+## Config file (routa.yaml)
 
-Instead of proxying all traffic to a single local port, split inbound requests across multiple local microservices:
+Place in your project root. Loaded automatically at startup.
 
 ```yaml
+tunnel:
+  port: 3000
+  relay_url: "ws://myserver.com:8080"
+  name: "my-app"
+  dashboard_port: 4040
+  auth_token: ""
+  basic_auth_user: ""
+  basic_auth_pass: ""
+
 routes:
-  - path: "/api/v1/auth/*"
+  - pattern: "/api/users/*"
     target: "http://localhost:8081"
-  - path: "/api/v1/users/*"
+    name: "users-service"
+  - pattern: "/api/payments/*"
     target: "http://localhost:8082"
-  - path: "/*"
-    target: "http://localhost:3000"
-```
+    name: "payments-service"
 
-You can also manage routes dynamically via the **Routes** tab in the dashboard.
-
----
-
-## Traffic Mutation & Mocking
-
-Intercept and transform HTTP traffic dynamically before it reaches your backend server.
-
-### Supported Mutations
-- **Set/Remove Headers**: Add debug flags (`X-Debug: true`) or strip authorization tokens.
-- **Path Prefix Stripping**: Rewrite `/api/v1/users` to `/users`.
-- **Query Parameter Injections**: Append `?debug=1&trace=true`.
-- **JSON Body Dot-Path Mutations**: Mutate nested JSON fields on the fly:
-  - `set: "user.role=admin"`
-  - `remove: "user.ssn"`
-- **Response Mocking**: Intercept specific paths and return custom JSON payloads directly without touching the backend:
-  ```yaml
-  request:
-    mock_response:
-      status: 200
-      body: '{"status": "ok", "mocked": true}'
-  ```
-
----
-
-## Network Failure Simulation
-
-Simulate unpredictable network conditions and test system failure recovery.
-
-### Options
-- **Fixed/Jittered Latency**: Add artificial delay (e.g. 500ms ± 100ms) to simulate slow cellular networks or remote data centers.
-- **Error Injection**: Force a percentage of requests (e.g. 10%) to fail with `500 Internal Server Error` or `503 Service Unavailable`.
-- **Connection Drop Rate**: Simulate abrupt TCP connection drops.
-- **Timeouts**: Cancel upstream requests after a specified millisecond threshold.
-
-Configure these live via the **Simulator** dashboard panel or through `routa.yaml`.
-
----
-
-## Shadow Traffic & Response Diffing
-
-Safely test new API versions or refactored backend services with live traffic shadowing:
-
-```yaml
-shadows:
-  - name: "v2 Migration Test"
+mutations:
+  - name: "Add debug header"
     match:
-      path: "/api/v2/*"
-    shadow_url: "http://localhost:9090"
-    compare_response: true
-```
+      path: "/api/*"
+    request:
+      set_headers:
+        X-Debug: "true"
+      remove_headers:
+        - "X-Internal-Secret"
 
-When a request arrives at `/api/v2/*`:
-1. Routa proxies the request to the primary service (`localhost:3000`).
-2. Asynchronously forwards a duplicate request to the shadow service (`localhost:9090`).
-3. Runs the **Deep Differ** engine comparing status codes, response headers, and nested JSON fields.
-4. Renders side-by-side diff highlights in the dashboard's **Diff** tab.
+  - name: "Block deletes"
+    match:
+      method: "DELETE"
+    response:
+      mock_status: 403
+      mock_body: '{"error":"not allowed"}'
+      mock_headers:
+        Content-Type: "application/json"
+
+simulations:
+  - name: "Slow payments"
+    match:
+      path: "/api/payments/*"
+    delay_ms: 300
+    jitter_ms: 50
+    error_rate: 0.1
+    error_status: 503
+
+shadow:
+  enabled: true
+  targets:
+    - "http://localhost:3001"
+
+recording:
+  max_entries: 1000
+  redact_headers:
+    - "Authorization"
+    - "Cookie"
+  exclude_paths:
+    - "/health"
+```
 
 ---
 
-## Session Storage & Deterministic Playback
+## Environment variables
 
-Save traffic snapshots into JSON fixtures to share with team members or run reproducible automated tests.
+| Variable | Description |
+|----------|-------------|
+| `ROUTA_LOCAL_PORT` | Port to forward to |
+| `ROUTA_RELAY_URL` | Relay WebSocket URL |
+| `ROUTA_AUTH_TOKEN` | Relay auth token |
+| `ROUTA_DASHBOARD_PORT` | Dashboard port (default: `4040`) |
+| `ROUTA_TUNNEL_NAME` | Tunnel name |
+| `ROUTA_BASIC_AUTH_USER` | Basic auth user for public endpoint |
+| `ROUTA_BASIC_AUTH_PASS` | Basic auth password |
+| `ROUTA_BASE_DOMAIN` | Relay base domain |
+| `ROUTA_RELAY_PORT` | Relay listen port |
+| `ROUTA_DATA_DIR` | Data directory (default: `~/.routa`) |
 
-1. **Save Session**: Click **Save Session** in the dashboard to persist current request history under `~/.routa/sessions/<name>.json`.
-2. **Playback Session**: Run session playback via dashboard or API to re-fire recorded requests sequentially with preserved timing intervals.
+---
+
+## Data storage
+
+```
+~/.routa/
+  sessions/     ← recorded traffic sessions (JSON)
+```

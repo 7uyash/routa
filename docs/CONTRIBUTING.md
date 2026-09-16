@@ -39,21 +39,25 @@ Routa is organized into clean, modular Go packages with minimal external depende
 ```text
 Routa
 ├── agent/       # Local agent daemon & embedded Web Dashboard (REST API + WS)
-├── cli/         # Command-line parser, banner, & terminal formatting
+├── cli/         # Command-line parser, interactive TUI, and banner
 ├── cmd/routa/   # Entry point (main.go)
-├── config/      # Configuration structs, env vars, & YAML loader
+├── config/      # Configuration structs, env vars, YAML loader & project config
 ├── diff/        # HTTP response comparator & deep JSON body differ
+├── discovery/   # Local port scanner & tech-stack inference
 ├── middleware/  # Traffic mutation & fault simulation middleware
+├── mock/        # Mock lab — fixed-response endpoint definitions
 ├── protocol/    # Wire format binary framing & JSON payload messaging
-├── proxy/       # Reverse HTTP proxy & response capture engine
+├── proxy/       # Reverse HTTP proxy with timing capture
 ├── recorder/    # Thread-safe ring buffer for request history
-├── relay/       # Edge Relay server & client registry
+├── relay/       # Edge relay server & client registry
 ├── replay/      # Request replay & edit-replay engine
-├── router/      # Pattern-based HTTP router
+├── router/      # Pattern-based HTTP router (supports multiple local targets)
 ├── shadow/      # Shadow traffic forwarder & comparison pipeline
-├── storage/     # Session persistence & deterministic playback runner
-├── tunnel/      # Persistent WebSocket tunnel client
-└── webhook/     # Webhook lab, provider detector, & delivery history
+├── simulator/   # (reserved for future standalone simulator)
+├── storage/     # Session persistence & scenario/playback runner
+├── traffic/     # Canonical Request, Response & Timing models
+├── tunnel/      # Persistent WebSocket tunnel client with reconnect
+└── webhook/     # Webhook lab, provider detector & delivery history
 ```
 
 ---
