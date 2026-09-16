@@ -13,8 +13,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/7uyash/routa/agent"
 	"github.com/7uyash/routa/cli"
@@ -66,11 +69,35 @@ func runDev(ctx context.Context, cmd *cli.Command) {
 	)
 	_ = display // Display functions are called by the agent via log output
 
+	// Open dashboard automatically.
+	go func() {
+		time.Sleep(500 * time.Millisecond) // Give server a moment to bind
+		url := fmt.Sprintf("http://localhost:%d", cfg.DashboardPort)
+		openBrowser(url)
+	}()
+
 	if err := a.Start(ctx); err != nil && ctx.Err() == nil {
 		log.Fatalf("[routa] fatal: %v", err)
 	}
 
 	a.Stop()
+}
+
+func openBrowser(url string) {
+	var err error
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+	if err != nil {
+		log.Printf("[agent] Could not auto-open browser: %v", err)
+	}
 }
 
 func runRelay(ctx context.Context, cmd *cli.Command) {

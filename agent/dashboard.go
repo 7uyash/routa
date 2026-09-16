@@ -115,6 +115,7 @@ func (ds *DashboardServer) Start() error {
 	mux.HandleFunc("/api/webhooks", ds.handleWebhooks)
 	mux.HandleFunc("/api/webhooks/", ds.handleWebhookDetail)
 	mux.HandleFunc("/api/ws", ds.handleWebSocket)
+	mux.HandleFunc("/api/target", ds.handleTarget)
 
 	// Phase 2 API routes.
 	mux.HandleFunc("/api/routes", ds.handleRoutes)
@@ -231,6 +232,57 @@ func (ds *DashboardServer) handleRequests(w http.ResponseWriter, r *http.Request
 	case "DELETE":
 		ds.rec.Clear()
 		writeJSON(w, http.StatusOK, map[string]any{"cleared": true})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (ds *DashboardServer) handleTarget(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if ds.agent == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "agent not available"})
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		target := ds.agent.router.Match("/") // The catch-all target
+		writeJSON(w, http.StatusOK, map[string]any{"target": target})
+
+	case "PUT":
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 1024))
+		var req struct {
+			Target string `json:"target"`
+		}
+		if err := json.Unmarshal(body, &req); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+
+		routes := ds.agent.router.Routes()
+		var found bool
+		for i, rt := range routes {
+			if rt.Pattern == "/*" {
+				routes[i].Target = req.Target
+				found = true
+				break
+			}
+		}
+		if !found {
+			routes = append(routes, router.Route{Pattern: "/*", Target: req.Target, Name: "default"})
+		}
+		ds.agent.router.SetRoutes(routes)
+
+		// Update the display banner asynchronously
+		go func() {
+			fmt.Printf("\n  [agent] Default target updated to: %s\n", req.Target)
+		}()
+
+		writeJSON(w, http.StatusOK, map[string]any{"target": req.Target})
 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

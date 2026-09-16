@@ -19,14 +19,12 @@ type Command struct {
 // Parse parses command-line arguments and returns a Command.
 func Parse() (*Command, error) {
 	if len(os.Args) < 2 {
-		return runInteractiveMainMenu()
+		// Default to dev mode if no args provided
+		os.Args = append(os.Args, "dev")
 	}
 
 	switch os.Args[1] {
 	case "dev":
-		if len(os.Args) == 2 {
-			return runInteractiveDev()
-		}
 		return parseDev()
 	case "relay":
 		if len(os.Args) == 2 {
@@ -65,7 +63,7 @@ func parseDev() (*Command, error) {
 	fs.StringVar(&cfg.LocalHost, "host", cfg.LocalHost, "Local host to forward to")
 	fs.IntVar(&cfg.MaxRecordedEntries, "max-entries", cfg.MaxRecordedEntries, "Max recorded entries")
 
-	// Extract port from positional args.
+	// Extract port from positional args if present.
 	args := os.Args[2:]
 	if len(args) > 0 {
 		if port, err := strconv.Atoi(args[0]); err == nil {
@@ -76,10 +74,6 @@ func parseDev() (*Command, error) {
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
-	}
-
-	if cfg.LocalPort == 0 {
-		return nil, fmt.Errorf("port is required: routa dev <port>")
 	}
 
 	if err := cfg.Validate("dev"); err != nil {
