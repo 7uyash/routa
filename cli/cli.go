@@ -57,6 +57,7 @@ func parseDev() (*Command, error) {
 	fs.StringVar(&cfg.RelayURL, "relay", cfg.RelayURL, "Relay server URL")
 	fs.StringVar(&cfg.AuthToken, "token", cfg.AuthToken, "Authentication token")
 	fs.IntVar(&cfg.DashboardPort, "dashboard", cfg.DashboardPort, "Dashboard port")
+	fs.IntVar(&cfg.ProxyPort, "proxy", cfg.ProxyPort, "Local proxy port")
 	fs.StringVar(&cfg.TunnelName, "name", cfg.TunnelName, "Tunnel name (subdomain)")
 	fs.StringVar(&cfg.BasicAuthUser, "auth-user", cfg.BasicAuthUser, "Basic auth username")
 	fs.StringVar(&cfg.BasicAuthPass, "auth-pass", cfg.BasicAuthPass, "Basic auth password")
@@ -128,6 +129,7 @@ FLAGS (dev):
   --relay <url>           Relay server URL (default: ws://localhost:8080)
   --token <token>         Authentication token
   --dashboard <port>      Dashboard port (default: 4040)
+  --proxy <port>          Local proxy port (default: 4000)
   --name <name>           Tunnel name / subdomain
   --auth-user <user>      Basic auth username for tunnel
   --auth-pass <pass>      Basic auth password for tunnel
