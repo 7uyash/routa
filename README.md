@@ -17,11 +17,6 @@ routa dev
 ```
 *(This instantly launches the Dashboard in your browser where you can pick or enter a target dynamically!)*
 
-It will create a proxy based on host and port selection:
-```powershell
-routa dev
-```
-
 ---
 
 ## How it works
