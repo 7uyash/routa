@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -137,4 +138,72 @@ func TestSimulatorTimeout(t *testing.T) {
 	if res.TimeoutMs != 5000 {
 		t.Errorf("TimeoutMs = %d, want 5000", res.TimeoutMs)
 	}
+}
+
+func TestSimulatorConcurrency(t *testing.T) {
+	ruleA := []config.SimulationConfig{
+		func() config.SimulationConfig {
+			r := simRule("rule-a", "/api/*", "")
+			r.DelayMs = 10
+			r.JitterMs = 5
+			r.ErrorRate = 0.5
+			r.ErrorStatus = 503
+			return r
+		}(),
+	}
+	ruleB := []config.SimulationConfig{
+		func() config.SimulationConfig {
+			r := simRule("rule-b", "/api/*", "")
+			r.TimeoutMs = 1000
+			r.BandwidthBps = 1024
+			return r
+		}(),
+	}
+
+	s := NewSimulator(ruleA)
+
+	var wg sync.WaitGroup
+	done := make(chan struct{})
+
+	// Writer updating rules concurrently
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		flip := false
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				if flip {
+					s.SetRules(ruleA)
+				} else {
+					s.SetRules(ruleB)
+				}
+				flip = !flip
+			}
+		}
+	}()
+
+	// Readers calling Simulate and Rules concurrently
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := traffic.Request{Method: "GET", Path: "/api/test"}
+			for j := 0; j < 100; j++ {
+				_ = s.Rules()
+				_ = s.Simulate(req)
+			}
+		}()
+	}
+
+	timeOut := make(chan struct{})
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		close(done)
+		close(timeOut)
+	}()
+	<-timeOut
+	wg.Wait()
 }

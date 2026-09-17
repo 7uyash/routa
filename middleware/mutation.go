@@ -2,10 +2,10 @@ package middleware
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/7uyash/routa/config"
 	"github.com/7uyash/routa/traffic"
@@ -13,21 +13,30 @@ import (
 
 // Mutator applies traffic mutation rules to requests and responses.
 type Mutator struct {
+	mu    sync.RWMutex
 	rules []config.MutationConfig
 }
 
 // NewMutator creates a Mutator from a slice of rules.
 func NewMutator(rules []config.MutationConfig) *Mutator {
-	return &Mutator{rules: rules}
+	cp := make([]config.MutationConfig, len(rules))
+	copy(cp, rules)
+	return &Mutator{rules: cp}
 }
 
 // SetRules replaces the rule set at runtime (hot-reload from dashboard).
 func (m *Mutator) SetRules(rules []config.MutationConfig) {
-	m.rules = rules
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := make([]config.MutationConfig, len(rules))
+	copy(cp, rules)
+	m.rules = cp
 }
 
 // Rules returns a copy of the current rule set.
 func (m *Mutator) Rules() []config.MutationConfig {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	cp := make([]config.MutationConfig, len(m.rules))
 	copy(cp, m.rules)
 	return cp
@@ -42,6 +51,9 @@ type MutatedRequest struct {
 
 // ApplyToRequest applies all matching rules to a request and returns the mutated version.
 func (m *Mutator) ApplyToRequest(req traffic.Request) MutatedRequest {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	result := MutatedRequest{
 		Request: req,
 	}
@@ -75,12 +87,15 @@ func (m *Mutator) ApplyToRequest(req traffic.Request) MutatedRequest {
 		// Set / override headers.
 		for k, v := range req.SetHeaders {
 			result.Request.Headers[k] = []string{v}
+			if canonical := http.CanonicalHeaderKey(k); canonical != k {
+				result.Request.Headers[canonical] = []string{v}
+			}
 		}
 		// Remove headers.
 		for _, k := range req.RemoveHeaders {
 			delete(result.Request.Headers, k)
-			// Also try canonical form.
-			delete(result.Request.Headers, http2canonical(k))
+			delete(result.Request.Headers, http.CanonicalHeaderKey(k))
+			delete(result.Request.Headers, strings.ToLower(k))
 		}
 
 		// Path rewrite.
@@ -111,6 +126,16 @@ func (m *Mutator) ApplyToRequest(req traffic.Request) MutatedRequest {
 // ApplyToResponse applies all matching rules to a response (headers, status).
 // Returns mutated headers and status code.
 func (m *Mutator) ApplyToResponse(req traffic.Request, resp *traffic.Response) {
+	if resp == nil {
+		return
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if resp.Headers == nil {
+		resp.Headers = make(http.Header)
+	}
+
 	for _, rule := range m.rules {
 		if !matchesRule(rule.Match, req.Method, req.Path) {
 			continue
@@ -119,10 +144,14 @@ func (m *Mutator) ApplyToResponse(req traffic.Request, resp *traffic.Response) {
 
 		for k, v := range ruleResp.SetHeaders {
 			resp.Headers[k] = []string{v}
+			if canonical := http.CanonicalHeaderKey(k); canonical != k {
+				resp.Headers[canonical] = []string{v}
+			}
 		}
 		for _, k := range ruleResp.RemoveHeaders {
 			delete(resp.Headers, k)
-			delete(resp.Headers, http2canonical(k))
+			delete(resp.Headers, http.CanonicalHeaderKey(k))
+			delete(resp.Headers, strings.ToLower(k))
 		}
 		if ruleResp.ForceStatus != 0 {
 			resp.StatusCode = ruleResp.ForceStatus
@@ -215,9 +244,4 @@ func setDotPath(node any, parts []string, val any) any {
 		m[key] = setDotPath(m[key], parts[1:], val)
 	}
 	return m
-}
-
-// http2canonical converts a lowercase header name to Go's canonical form.
-func http2canonical(s string) string {
-	return fmt.Sprintf("%s%s", strings.ToUpper(s[:1]), s[1:])
 }

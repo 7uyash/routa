@@ -2,7 +2,9 @@ package middleware
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/7uyash/routa/config"
 	"github.com/7uyash/routa/traffic"
@@ -165,4 +167,127 @@ func contains(s, sub string) bool {
 		}
 		return false
 	}()))
+}
+
+func TestMutatorCanonicalHeaderRemoval(t *testing.T) {
+	m := NewMutator([]config.MutationConfig{
+		mutRule("remove-multi-word", "/*", "", config.RequestMutation{
+			RemoveHeaders: []string{"content-type", "x-custom-request-id", ""},
+		}, config.ResponseMutation{
+			RemoveHeaders: []string{"Content-Security-Policy"},
+		}),
+	})
+
+	req := traffic.Request{
+		Method: "POST",
+		Path:   "/api/test",
+		Headers: map[string][]string{
+			"Content-Type":        {"application/json"},
+			"X-Custom-Request-Id": {"id-456"},
+			"Authorization":       {"Bearer xyz"},
+		},
+	}
+	result := m.ApplyToRequest(req)
+	if _, ok := result.Request.Headers["Content-Type"]; ok {
+		t.Error("Content-Type should have been removed when rule used lowercase content-type")
+	}
+	if _, ok := result.Request.Headers["X-Custom-Request-Id"]; ok {
+		t.Error("X-Custom-Request-Id should have been removed when rule used lowercase x-custom-request-id")
+	}
+	if _, ok := result.Request.Headers["Authorization"]; !ok {
+		t.Error("Authorization should still be present")
+	}
+
+	resp := &traffic.Response{
+		StatusCode: 200,
+		Headers: map[string][]string{
+			"content-security-policy": {"default-src 'self'"},
+			"Server":                  {"test"},
+		},
+	}
+	m.ApplyToResponse(req, resp)
+	if _, ok := resp.Headers["content-security-policy"]; ok {
+		t.Error("content-security-policy should have been removed when rule used canonical Content-Security-Policy")
+	}
+	if _, ok := resp.Headers["Server"]; !ok {
+		t.Error("Server header should still be present")
+	}
+}
+
+func TestMutatorConcurrency(t *testing.T) {
+	ruleA := []config.MutationConfig{
+		mutRule("rule-a", "/api/*", "GET", config.RequestMutation{
+			SetHeaders: map[string]string{"X-Rule": "A"},
+		}, config.ResponseMutation{
+			ForceStatus: 200,
+		}),
+	}
+	ruleB := []config.MutationConfig{
+		mutRule("rule-b", "/api/*", "GET", config.RequestMutation{
+			SetHeaders: map[string]string{"X-Rule": "B"},
+		}, config.ResponseMutation{
+			ForceStatus: 201,
+		}),
+	}
+
+	m := NewMutator(ruleA)
+
+	var wg sync.WaitGroup
+	done := make(chan struct{})
+
+	// Writer goroutine updating rules
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		flip := false
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				if flip {
+					m.SetRules(ruleA)
+				} else {
+					m.SetRules(ruleB)
+				}
+				flip = !flip
+			}
+		}
+	}()
+
+	// Reader goroutines
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := traffic.Request{
+				Method:  "GET",
+				Path:    "/api/data",
+				Headers: map[string][]string{"User-Agent": {"test"}},
+			}
+			for j := 0; j < 100; j++ {
+				_ = m.Rules()
+				res := m.ApplyToRequest(req)
+				if len(res.Request.Headers["X-Rule"]) == 0 {
+					t.Errorf("X-Rule header missing")
+				}
+				resp := &traffic.Response{StatusCode: 500, Headers: map[string][]string{}}
+				m.ApplyToResponse(req, resp)
+				if resp.StatusCode != 200 && resp.StatusCode != 201 {
+					t.Errorf("unexpected status %d", resp.StatusCode)
+				}
+			}
+		}()
+	}
+
+	// Let readers finish
+	timeOut := make(chan struct{})
+	go func() {
+		// Wait for reader routines
+		time.Sleep(50 * time.Millisecond)
+		close(done)
+		close(timeOut)
+	}()
+	<-timeOut
+	wg.Wait()
 }
