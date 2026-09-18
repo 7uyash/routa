@@ -17,11 +17,6 @@ routa dev
 ```
 *(This instantly launches the Dashboard in your browser where you can pick or enter a target dynamically!)*
 
-If you already know the port you want to proxy (e.g., 3000):
-```powershell
-routa dev 3000
-```
-
 ---
 
 ## How it works

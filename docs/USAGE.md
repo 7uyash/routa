@@ -19,15 +19,10 @@ routa
 
 ## Dev mode — exposing a local service
 
-```bash
-routa dev <port> [flags]
-```
-
 The port can also come before or instead of `dev`:
 ```bash
 routa 3000           # shorthand — same as routa dev 3000
 routa dev            # interactive service picker
-routa dev 3000       # direct
 ```
 
 ### Flags
