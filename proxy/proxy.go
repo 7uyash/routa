@@ -4,6 +4,7 @@ package proxy
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -11,22 +12,62 @@ import (
 	"github.com/7uyash/routa/traffic"
 )
 
+// DefaultTransport is the shared, production-tuned http.Transport for Routa's
+// local developer gateway. It is configured to handle high concurrency bursts
+// to local backends without connection churn or socket exhaustion:
+//   - MaxIdleConns (200): Total idle connection pool size across all hosts.
+//   - MaxIdleConnsPerHost (100): Overrides Go's default of 2 to eliminate socket
+//     churn (TIME_WAIT spikes) when proxying thousands of requests to a single local target.
+//   - IdleConnTimeout (90s): Closes idle connections after 90s, matching Go stdlib defaults.
+//   - DialContext (Timeout: 10s, KeepAlive: 30s): Quick connection establishment for local/internal
+//     endpoints while enabling TCP keepalive probes.
+//   - TLSHandshakeTimeout (10s): Prevents hung TLS handshakes for local HTTPS services.
+//   - ResponseHeaderTimeout (60s): Bounds the time waiting for server response headers while
+//     leaving ample headroom for slow local endpoints, breakpoints, or long computations.
+//   - ExpectContinueTimeout (1s): Standard wait time before transmitting large request bodies.
+//   - ForceAttemptHTTP2 (true): Enables HTTP/2 support when supported by the upstream target.
+var DefaultTransport http.RoundTripper = &http.Transport{
+	Proxy: http.ProxyFromEnvironment,
+	DialContext: (&net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext,
+	ForceAttemptHTTP2:     true,
+	MaxIdleConns:          200,
+	MaxIdleConnsPerHost:   100,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ResponseHeaderTimeout: 60 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+}
+
 // Forwarder sends HTTP requests to a local target and captures timing.
 type Forwarder struct {
 	client *http.Client
 }
 
-// New creates a Forwarder with sensible timeout defaults.
+// New creates a Forwarder with sensible timeout defaults and the shared gateway transport.
 func New() *Forwarder {
+	return NewWithTransport(DefaultTransport)
+}
+
+// NewWithTransport creates a Forwarder using the provided RoundTripper.
+func NewWithTransport(transport http.RoundTripper) *Forwarder {
 	return &Forwarder{
 		client: &http.Client{
-			Timeout: 120 * time.Second,
+			Transport: transport,
+			Timeout:   120 * time.Second,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// Don't follow redirects — return them to the caller as-is.
 				return http.ErrUseLastResponse
 			},
 		},
 	}
+}
+
+// Transport returns the RoundTripper transport configured on the Forwarder's HTTP client.
+func (f *Forwarder) Transport() http.RoundTripper {
+	return f.client.Transport
 }
 
 // Forward sends the request to the given target URL and returns the response
