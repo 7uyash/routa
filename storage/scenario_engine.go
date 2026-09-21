@@ -231,7 +231,7 @@ func (sr *ScenarioRunner) Replay(ctx context.Context, opts ReplayOptions) (*Scen
 		}
 
 		stepStart := time.Now()
-		_, resp, fwdErr := sr.executor.Execute(stepReq, fullURL, execOpts)
+		_, resp, fwdErr := sr.executor.Execute(ctx, stepReq, fullURL, execOpts)
 		stepDuration := time.Since(stepStart).Milliseconds()
 
 		stepRes := &StepExecutionResult{

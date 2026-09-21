@@ -95,7 +95,7 @@ func (p *PlaybackEngine) Play(ctx context.Context, opts PlaybackOptions) error {
 			Record:     true,
 		}
 
-		p.executor.Execute(req, fullURL, execOpts)
+		p.executor.Execute(ctx, req, fullURL, execOpts)
 	}
 
 	return nil

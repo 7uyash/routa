@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -87,7 +88,7 @@ func TestForwarderPreservesHeaders(t *testing.T) {
 		Body: []byte(`{"payload":"test"}`),
 	}
 
-	resp, err := f.Forward(req, server.URL)
+	resp, err := f.Forward(context.Background(), req, server.URL)
 	if err != nil {
 		t.Fatalf("Forward failed: %v", err)
 	}
@@ -150,7 +151,7 @@ func TestForwarderDoesNotFollowRedirects(t *testing.T) {
 		Headers: http.Header{},
 	}
 
-	resp, err := f.Forward(req, server.URL+"/redirect")
+	resp, err := f.Forward(context.Background(), req, server.URL+"/redirect")
 	if err != nil {
 		t.Fatalf("Forward returned error: %v", err)
 	}
@@ -185,7 +186,7 @@ func TestForwarderConnectionReuse(t *testing.T) {
 
 	// Execute sequential requests
 	for i := 0; i < 5; i++ {
-		resp, err := f.Forward(req, server.URL)
+		resp, err := f.Forward(context.Background(), req, server.URL)
 		if err != nil {
 			t.Fatalf("request %d failed: %v", i, err)
 		}
@@ -197,5 +198,51 @@ func TestForwarderConnectionReuse(t *testing.T) {
 	// With connection reuse (keep-alive), all requests should share the same client connection
 	if len(remoteAddrs) != 1 {
 		t.Errorf("expected 1 connection to be reused across sequential requests, but got %d distinct connections: %v", len(remoteAddrs), remoteAddrs)
+	}
+}
+
+// TestForwarderContextCancellation verifies that cancelling the caller's context
+// aborts the in-flight upstream request and causes Forward to return promptly
+// with a non-nil error rather than blocking until the client timeout elapses.
+func TestForwarderContextCancellation(t *testing.T) {
+	// Set up a slow server that does not respond until it receives a signal.
+	serverUnblocked := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-serverUnblocked:
+			w.WriteHeader(http.StatusOK)
+		case <-time.After(10 * time.Second):
+			w.WriteHeader(http.StatusGatewayTimeout)
+		}
+	}))
+	defer server.Close()
+	defer close(serverUnblocked) // release the handler goroutine on cleanup
+
+	f := New()
+
+	req := traffic.Request{
+		Method:  "GET",
+		Path:    "/slow",
+		Headers: http.Header{},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := f.Forward(ctx, req, server.URL+"/slow")
+		done <- err
+	}()
+
+	// Cancel immediately — Forward should return well before the 10 s server delay.
+	cancel()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected Forward to return an error after context cancellation, got nil")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Forward did not return promptly after context cancellation")
 	}
 }

@@ -1,6 +1,7 @@
 package replay
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -47,7 +48,10 @@ func BuildTargetURL(target, path, query string) string {
 
 // Execute forwards a traffic.Request to targetURL, measures timing, constructs a recorder.Entry,
 // records it if requested, and returns the constructed entry along with any forwarder error.
-func (e *Executor) Execute(req traffic.Request, targetURL string, opts ExecuteOptions) (*recorder.Entry, *traffic.Response, error) {
+//
+// The provided ctx is forwarded to the underlying proxy so the outgoing HTTP
+// request can be cancelled when the caller's context is done.
+func (e *Executor) Execute(ctx context.Context, req traffic.Request, targetURL string, opts ExecuteOptions) (*recorder.Entry, *traffic.Response, error) {
 	start := time.Now()
 
 	host := req.Host
@@ -55,7 +59,7 @@ func (e *Executor) Execute(req traffic.Request, targetURL string, opts ExecuteOp
 		host = opts.Host
 	}
 
-	resp, err := e.Forwarder.Forward(req, targetURL)
+	resp, err := e.Forwarder.Forward(ctx, req, targetURL)
 
 	entry := &recorder.Entry{
 		Timestamp:      time.Now(),

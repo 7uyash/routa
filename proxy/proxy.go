@@ -2,6 +2,8 @@
 package proxy
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -72,15 +74,19 @@ func (f *Forwarder) Transport() http.RoundTripper {
 
 // Forward sends the request to the given target URL and returns the response
 // with a timing breakdown. It does not follow redirects.
-func (f *Forwarder) Forward(req traffic.Request, targetURL string) (*traffic.Response, error) {
+//
+// The provided ctx controls the lifetime of the outgoing request. If ctx is
+// cancelled or times out, the in-flight upstream connection is torn down
+// immediately so callers are not left blocked waiting for a response.
+func (f *Forwarder) Forward(ctx context.Context, req traffic.Request, targetURL string) (*traffic.Response, error) {
 	start := time.Now()
 
 	var bodyReader io.Reader
 	if len(req.Body) > 0 {
-		bodyReader = strings.NewReader(string(req.Body))
+		bodyReader = bytes.NewReader(req.Body)
 	}
 
-	httpReq, err := http.NewRequest(req.Method, targetURL, bodyReader)
+	httpReq, err := http.NewRequestWithContext(ctx, req.Method, targetURL, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
