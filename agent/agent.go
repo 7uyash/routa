@@ -308,7 +308,7 @@ func (a *Agent) handleHTTPRequest(frame protocol.Frame) {
 	}
 
 	// 7. Forward to primary target
-	resp, err := a.proxy.Forward(mutReq, targetURL)
+	resp, err := a.proxy.Forward(context.Background(), mutReq, targetURL)
 
 	var proxyResp *traffic.Response
 	if err != nil {
@@ -488,7 +488,7 @@ func (a *Agent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 7. Forward to primary target
-	resp, err := a.proxy.Forward(mutReq, targetURL)
+	resp, err := a.proxy.Forward(r.Context(), mutReq, targetURL)
 
 	var proxyResp *traffic.Response
 	if err != nil {

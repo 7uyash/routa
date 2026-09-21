@@ -2,6 +2,8 @@
 package replay
 
 import (
+	"context"
+
 	"github.com/7uyash/routa/proxy"
 	"github.com/7uyash/routa/recorder"
 	"github.com/7uyash/routa/traffic"
@@ -49,7 +51,7 @@ func (e *Engine) Replay(entryID, localTarget string) (*recorder.Entry, error) {
 		Record:     true,
 	}
 
-	entry, _, err := e.executor.Execute(req, targetURL, opts)
+	entry, _, err := e.executor.Execute(context.Background(), req, targetURL, opts)
 	return entry, err
 }
 
@@ -73,7 +75,7 @@ func (e *Engine) EditAndReplay(req EditRequest, localTarget string) (*recorder.E
 		Record:     true,
 	}
 
-	entry, _, err := e.executor.Execute(tfReq, targetURL, opts)
+	entry, _, err := e.executor.Execute(context.Background(), tfReq, targetURL, opts)
 	return entry, err
 }
 

@@ -1,6 +1,7 @@
 package replay_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -41,7 +42,7 @@ func TestExecutorExecute(t *testing.T) {
 		Record:   true,
 	}
 
-	entry, resp, err := executor.Execute(req, targetURL, opts)
+	entry, resp, err := executor.Execute(context.Background(), req, targetURL, opts)
 	if err != nil {
 		t.Fatalf("unexpected error executing request: %v", err)
 	}
