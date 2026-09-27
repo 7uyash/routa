@@ -1,235 +1,97 @@
 # Routa — Developer Traffic Gateway
 
-Routa exposes your local HTTP service to the internet through a WebSocket tunnel, with a built-in dashboard, traffic inspector, mutation engine, fault simulator, shadow traffic, and mock lab — all from a single binary.
+Routa is a Go tool for inspecting and changing HTTP traffic sent to a local service. In `dev` mode it runs a dashboard and a separate local HTTP proxy. An optional, self-hosted relay can forward requests from a public server to the local agent over a WebSocket tunnel.
 
----
+## Quick start
 
-## ⚡ Quick Start (The Shortest Way)
-
-Install the latest version using Go:
-```powershell
-go install github.com/7uyash/routa/cmd/routa@latest
-```
-
-Start Routa locally (no target required at startup):
-```powershell
-routa dev
-```
-*(This instantly launches the Dashboard in your browser where you can pick or enter a target dynamically!)*
-
----
-
-## How it works
-
-```
-  Browser / API client
-         |
-  [Routa Local Proxy]   ←── http://localhost:4000 (Your local entry point)
-         |
-  [Routa Agent]         ←── Logs, Inspects, Mutates, Simulates
-         |
-  [Local Service]       ←── localhost:3000 (Your app)
-```
-
-Routa is designed to make local API testing flawless. When you run `routa dev`, it spins up:
-1. **A Dashboard (`http://localhost:4040`)** — To configure rules, mock endpoints, and monitor traffic in real time.
-2. **A Dedicated Local Proxy (`http://localhost:4000`)** — Your new entry point. Access this URL, and Routa forwards everything accurately to your local application, allowing you to intercept traffic even for root routes (`/`).
-
----
-
-## Features
-
-- **Dynamic Target Selection** — Change your proxy destination straight from the UI without restarting the terminal process.
-- **Service Discovery** — Instantly discovers services running on local ports and auto-detects their tech stack (Vite, Next.js, Express, FastAPI, etc.).
-- **Traffic Inspector** — Live feed of all requests/responses with headers, bodies, and timing.
-- **Replay** — Re-send any captured request; edit method/path/headers/body before replaying.
-- **Mutation Rules** — Add/edit/remove request & response mutation rules at runtime.
-- **Network Simulator** — Inject latency, jitter, error rates, and connection drops per path.
-- **Mock Lab** — Define HTTP endpoints that return fixed responses without touching your service.
-- **Webhook Lab** — Receive and inspect incoming webhooks.
-- **Shadow Traffic** — Mirror traffic to secondary targets and diff responses.
-- **Session Recorder** — Record request collections and play them back deterministically.
-
----
-
-## Usage
-
-### Local Proxy Mode (Dev Mode)
-```bash
-routa dev <port> [flags]
-
-# Start and pick target from the Dashboard
-routa dev
-```
-
-**Flags:**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--relay <url>` | — | Relay WebSocket URL, e.g. `ws://myserver.com:8080` |
-| `--name <name>` | *(random)* | Tunnel name / public subdomain |
-| `--dashboard <port>` | `4040` | Local dashboard port |
-| `--proxy <port>` | `4000` | Local proxy port |
-| `--token <token>` | — | Auth token for the relay |
-| `--auth-user <user>` | — | Basic auth username on the public endpoint |
-| `--auth-pass <pass>` | — | Basic auth password on the public endpoint |
-| `--host <host>` | `localhost` | Local host to forward to |
-| `--max-entries <n>` | `500` | Max requests kept in traffic inspector |
-
-### Public Tunnel Relay Mode
-
-Want to share your local environment with someone else or hook it up to external webhooks? You can spin up a lightweight, self-hosted edge server:
-
-**Step 1 — Start the relay (on a public server)**
-```bash
-routa relay --port 8080 --domain myserver.com:8080
-```
-
-**Step 2 — Expose your local service (on your laptop)**
-```bash
-routa dev 3000 --relay ws://myserver.com:8080 --name my-app
-```
-Your service is now securely reachable at `http://my-app.myserver.com:8080`.
-
----
-
-## Config file (routa.yaml)
-
-Place `routa.yaml` in your project directory. It is automatically loaded at startup and overrides CLI flags.
-
-```yaml
-tunnel:
-  port: 3000
-  relay_url: "ws://myserver.com:8080"
-  name: "my-app"
-  dashboard_port: 4040
-  proxy_port: 4000
-  auth_token: ""
-
-routes:
-  - pattern: "/api/users/*"
-    target: "http://localhost:8081"
-    name: "users-service"
-  - pattern: "/api/payments/*"
-    target: "http://localhost:8082"
-    name: "payments-service"
-
-mutations:
-  - name: "Inject debug header"
-    match:
-      path: "/api/*"
-      method: "GET"
-    request:
-      set_headers:
-        X-Debug: "true"
-      remove_headers:
-        - "X-Internal-Token"
-      strip_path_prefix: "/api/v1"
-      set_query:
-        debug: "true"
-      remove_query:
-        - "secret"
-      set_body_fields:
-        "user.role": '"admin"'
-    response:
-      set_headers:
-        X-Served-By: "routa"
-      force_status: 200
-
-  - name: "Block DELETE requests"
-    match:
-      method: "DELETE"
-    response:
-      mock_status: 403
-      mock_body: '{"error":"not allowed"}'
-      mock_headers:
-        Content-Type: "application/json"
-
-simulations:
-  - name: "Slow payments"
-    match:
-      path: "/api/payments/*"
-    delay_ms: 300
-    jitter_ms: 50
-    error_rate: 0.05
-    error_status: 503
-    drop: false
-
-shadow:
-  enabled: true
-  targets:
-    - "http://localhost:3001"
-
-recording:
-  enabled: true
-  max_entries: 1000
-  redact_headers:
-    - "Authorization"
-    - "Cookie"
-  redact_body_fields:
-    - "user.password"
-  exclude_paths:
-    - "/health"
-    - "/metrics"
-```
-
----
-
-## Environment variables
-
-All config can be set via environment variables:
-
-| Variable | Config field |
-|----------|-------------|
-| `ROUTA_LOCAL_PORT` | Local port to forward to |
-| `ROUTA_RELAY_URL` | Relay WebSocket URL |
-| `ROUTA_AUTH_TOKEN` | Auth token |
-| `ROUTA_DASHBOARD_PORT` | Dashboard port |
-| `ROUTA_PROXY_PORT` | Local proxy port |
-| `ROUTA_TUNNEL_NAME` | Tunnel name |
-| `ROUTA_BASIC_AUTH_USER` | Basic auth username |
-| `ROUTA_BASIC_AUTH_PASS` | Basic auth password |
-| `ROUTA_BASE_DOMAIN` | Relay base domain |
-| `ROUTA_RELAY_PORT` | Relay listen port |
-| `ROUTA_DATA_DIR` | Data directory (default: `~/.routa`) |
-
----
-
-## Installation via Source
+Routa requires **Go 1.26.4 or newer** (see [`go.mod`](go.mod)). To use the code in this repository, clone it and install from the checkout:
 
 ```bash
-# Requires Go 1.21+
 git clone https://github.com/7uyash/routa.git
 cd routa
-go build -o routa ./cmd/routa
-
-# Cross-compile all platforms
-make build-all          # Linux / macOS
-.\build.ps1             # Windows
+go install ./cmd/routa
+routa dev 3000
 ```
 
----
+Replace `3000` with the port of your running HTTP service. Open the dashboard at <http://localhost:4040>, then send requests to <http://localhost:4000>. For example, visit `http://localhost:4000/` to reach your app's `/` route through Routa. Requests sent directly to the app's port bypass Routa and do not appear in its inspector.
 
-## Data storage
+If you do not know the target port yet, run `routa dev` and select a service or enter its URL in the dashboard. The dashboard also opens automatically when `dev` starts.
 
-Sessions and scenarios are stored in `~/.routa/` (or `ROUTA_DATA_DIR`).
+> **Installing from Go releases:** `go install github.com/7uyash/routa/cmd/routa@latest` selects the latest tagged module release. The `v0.1.0` release predates the separate port `4000` proxy. If `@latest` installs that release, use `go install ./cmd/routa` from a checkout containing the feature. To inspect the installed build, run `go version -m "$(go env GOPATH)/bin/routa"` (use `routa.exe` on Windows).
 
+## How local mode works
+
+```text
+Browser or API client  →  localhost:4000 (local HTTP proxy)
+                              ↓ inspect, mutate, simulate, record
+                         localhost:3000 (your service)
+
+Dashboard             →  localhost:4040
 ```
-~/.routa/
-  sessions/   ← recorded traffic sessions
+
+The dashboard lets you inspect requests and responses, replay requests, choose a target, configure routes and mutation rules, create mock responses, simulate delays and errors, discover local services, compare shadow responses, and record scenarios. The proxy handles HTTP requests; it does not implement WebSocket upgrade forwarding. Both listeners use their configured ports (`4040` and `4000` by default). Check the terminal for a port binding error if either URL does not open.
+
+The green `localhost:4000` URL in the dashboard is the **local proxy**, not a public relay address. The **Local Only** status means no relay URL was configured. The top **Requests** count currently tracks tunnel requests; locally proxied requests can appear in the inspector while that count remains zero.
+
+### Dev command
+
+```text
+routa dev [target-port] [flags]
 ```
 
----
+| Flag | Default | Purpose |
+| --- | --- | --- |
+| `--dashboard <port>` | `4040` | Dashboard HTTP port |
+| `--proxy <port>` | `4000` | Local HTTP proxy port |
+| `--host <host>` | `localhost` | Host of the local target |
+| `--max-entries <n>` | `500` | Maximum requests kept in the inspector |
+| `--relay <url>` | none | WebSocket address of a self-hosted relay |
+| `--name <name>` | generated | Requested public subdomain when using a relay |
+| `--token <token>` | none | Token sent to the relay; the current relay does not validate it |
+| `--auth-user`, `--auth-pass` | none | Accepted by the CLI; public endpoint basic authentication is not wired into the relay |
 
-## Testing
+For example, `routa dev 3000 --proxy 4100 --dashboard 4140` uses `localhost:4100` for the app proxy and `localhost:4140` for the dashboard. Put flags after the optional target port.
+
+## Optional public relay
+
+Run the relay on a server reachable from the internet, with wildcard DNS for the subdomains you intend to use. For an HTTPS public URL, terminate TLS at a reverse proxy and forward HTTP and WebSocket traffic to Routa's relay port:
 
 ```bash
+# On the public server, behind a TLS reverse proxy:
+routa relay --port 8080 --domain example.com
+
+# On the machine running your local app on port 3000:
+routa dev 3000 --relay wss://example.com --name my-app
+```
+
+With suitable DNS and TLS setup, the relay returns `https://my-app.example.com`. The relay itself listens over plain HTTP on its configured port; it does not set up TLS or DNS. The current relay accepts the agent's token without checking it, and the CLI's basic auth flags do not protect public traffic. Do not expose sensitive services through it without access controls at your reverse proxy.
+
+The `relay` command also accepts `--host <host>` (default `0.0.0.0`) and `--domain <domain>` (default `localhost`). Running `routa relay` without flags opens an interactive setup form.
+
+## Configuration and storage
+
+CLI flags and environment variables configure the running agent. Supported environment variables include `ROUTA_LOCAL_PORT`, `ROUTA_RELAY_URL`, `ROUTA_AUTH_TOKEN`, `ROUTA_DASHBOARD_PORT`, `ROUTA_PROXY_PORT`, `ROUTA_TUNNEL_NAME`, `ROUTA_BASIC_AUTH_USER`, `ROUTA_BASIC_AUTH_PASS`, `ROUTA_BASE_DOMAIN`, `ROUTA_RELAY_PORT`, and `ROUTA_DATA_DIR`.
+
+There is a parser for `routa.yaml` in the source, but the CLI **does not call it yet**. Placing that file in a project directory currently has no effect. Configure rules through the dashboard instead.
+
+Saved sessions and scenarios are written under `~/.routa/sessions/` by default. Set `ROUTA_DATA_DIR` to use another base directory.
+
+## Build and test
+
+```bash
+go build -o routa ./cmd/routa
 go test ./...
 go vet ./...
 ```
 
----
+At present, `go vet ./...` reports a lock-copy warning in `storage/scenario_engine.go`; this is an existing source issue, independent of the README.
+
+For cross-platform binaries, run `make build-all` on Linux/macOS or `./build.ps1` in PowerShell on Windows.
+
+## Star history
+
+[![Star history for 7uyash/routa](https://api.star-history.com/svg?repos=7uyash/routa&type=date)](https://www.star-history.com/?repos=7uyash%2Frouta&type=date)
 
 ## License
 
-[MIT](/LICENSE)
+[MIT](LICENSE)
