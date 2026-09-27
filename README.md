@@ -1,6 +1,21 @@
-# Routa — Developer Traffic Gateway
+<div align="center">
 
-Routa is a Go tool for inspecting and changing HTTP traffic sent to a local service. In `dev` mode it runs a dashboard and a separate local HTTP proxy. An optional, self-hosted relay can forward requests from a public server to the local agent over a WebSocket tunnel.
+  <p><img src="agent/dashboard/static/logo.png" alt="Routa logo" width="360" /></p>
+
+  <h1>Routa</h1>
+
+  <p><strong>The developer traffic gateway for local HTTP services</strong></p>
+
+  <p>
+    <a href="https://github.com/7uyash/routa/stargazers"><img src="https://img.shields.io/github/stars/7uyash/routa" alt="GitHub stars" /></a>
+    <a href="https://github.com/7uyash/routa/graphs/contributors"><img src="https://img.shields.io/github/contributors/7uyash/routa" alt="Contributors" /></a>
+    <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26.4%2B-00ADD8?logo=go&amp;logoColor=white" alt="Go 1.26.4 or newer" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT license" /></a>
+  </p>
+
+  <p>Inspect, replay, mock, and simulate HTTP traffic through a local proxy and live dashboard. Connect an optional self-hosted relay to expose a local service remotely.</p>
+
+</div>
 
 ## Quick start
 
