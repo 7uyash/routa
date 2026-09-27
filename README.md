@@ -232,4 +232,4 @@ go vet ./...
 
 ## License
 
-MIT
+[MIT](/LICENSE)
