@@ -11,6 +11,7 @@ import (
 
 	"github.com/7uyash/routa/discovery"
 	"github.com/7uyash/routa/recorder"
+	"github.com/7uyash/routa/traffic"
 )
 
 // MockRule represents a mock API endpoint served by Routa.
@@ -153,16 +154,19 @@ func (l *Lab) ListRules() []*MockRule {
 	return res
 }
 
-// MatchRequest finds an active mock rule matching the incoming HTTP method and path.
+// MatchRequest finds an active mock rule matching the incoming HTTP method and
+// path. Method and path are matched with Routa's canonical rules, so a mock
+// behaves the same way a route or mutation with the same pattern does.
 func (l *Lab) MatchRequest(method, path string) *MockRule {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
+	req := traffic.Request{Method: method, Path: path}
 	for _, rule := range l.rules {
 		if !rule.Active {
 			continue
 		}
-		if (rule.Method == "*" || rule.Method == method) && matchPathPattern(rule.Path, path) {
+		if traffic.MatchRequest(rule.Method, rule.Path, req) {
 			return rule
 		}
 	}
@@ -180,17 +184,6 @@ func (r *MockRule) ServeMock() (int, map[string]string, []byte) {
 	}
 
 	return r.Status, r.Headers, []byte(r.Body)
-}
-
-func matchPathPattern(pattern, path string) bool {
-	if pattern == path || pattern == "*" {
-		return true
-	}
-	if len(pattern) > 0 && pattern[len(pattern)-1] == '*' {
-		prefix := pattern[:len(pattern)-1]
-		return len(path) >= len(prefix) && path[:len(prefix)] == prefix
-	}
-	return false
 }
 
 func generateMockID() string {

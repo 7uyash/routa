@@ -60,7 +60,7 @@ func (m *Mutator) ApplyToRequest(req traffic.Request) MutatedRequest {
 	result.Request.Headers = copyHeaders(req.Headers)
 
 	for _, rule := range m.rules {
-		if !matchesRule(rule.Match, result.Request.Method, result.Request.Path) {
+		if !traffic.MatchRequest(rule.Match.Method, rule.Match.Path, result.Request) {
 			continue
 		}
 
@@ -137,7 +137,7 @@ func (m *Mutator) ApplyToResponse(req traffic.Request, resp *traffic.Response) {
 	}
 
 	for _, rule := range m.rules {
-		if !matchesRule(rule.Match, req.Method, req.Path) {
+		if !traffic.MatchRequest(rule.Match.Method, rule.Match.Path, req) {
 			continue
 		}
 		ruleResp := rule.Response
@@ -160,25 +160,6 @@ func (m *Mutator) ApplyToResponse(req traffic.Request, resp *traffic.Response) {
 }
 
 // --- helpers ---
-
-func matchesRule(match config.MatchConfig, method, path string) bool {
-	if match.Method != "" && !strings.EqualFold(match.Method, method) {
-		return false
-	}
-	if match.Path != "" {
-		pattern := match.Path
-		if strings.HasSuffix(pattern, "*") {
-			if !strings.HasPrefix(path, strings.TrimSuffix(pattern, "*")) {
-				return false
-			}
-		} else {
-			if path != pattern {
-				return false
-			}
-		}
-	}
-	return true
-}
 
 func copyHeaders(h map[string][]string) map[string][]string {
 	out := make(map[string][]string, len(h))
