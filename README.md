@@ -99,7 +99,7 @@ go test ./...
 go vet ./...
 ```
 
-At present, `go vet ./...` reports a lock-copy warning in `storage/scenario_engine.go`; this is an existing source issue, independent of the README.
+`go vet ./...` is expected to report no findings.
 
 For cross-platform binaries, run `make build-all` on Linux/macOS or `./build.ps1` in PowerShell on Windows.
 
