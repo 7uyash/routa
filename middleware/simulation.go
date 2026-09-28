@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"math/rand"
-	"strings"
 	"sync"
 	"time"
 
@@ -73,7 +72,7 @@ func (s *Simulator) Simulate(req traffic.Request) SimResult {
 	result := SimResult{}
 
 	for _, rule := range s.rules {
-		if !simMatchesRule(rule.Match, req.Method, req.Path) {
+		if !traffic.MatchRequest(rule.Match.Method, rule.Match.Path, req) {
 			continue
 		}
 		if result.MatchedRule == "" {
@@ -135,23 +134,4 @@ func ApplyDelay(res SimResult) {
 	if res.Delay > 0 {
 		time.Sleep(res.Delay)
 	}
-}
-
-// simMatchesRule checks if a method+path matches a SimulationConfig match block.
-func simMatchesRule(match config.MatchConfig, method, path string) bool {
-	if match.Method != "" && !strings.EqualFold(match.Method, method) {
-		return false
-	}
-	if match.Path != "" {
-		if strings.HasSuffix(match.Path, "*") {
-			if !strings.HasPrefix(path, strings.TrimSuffix(match.Path, "*")) {
-				return false
-			}
-		} else {
-			if path != match.Path {
-				return false
-			}
-		}
-	}
-	return true
 }

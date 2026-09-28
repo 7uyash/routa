@@ -68,3 +68,35 @@ func TestRouterRoutes(t *testing.T) {
 		t.Errorf("Routes() len = %d, want 2", len(got))
 	}
 }
+
+// TestRouterUsesCanonicalMatching pins the router to traffic.MatchPath. The
+// router used to have its own matcher, which treated "*" and "/api*" as literal
+// paths, so a route with either of those patterns silently matched nothing.
+func TestRouterUsesCanonicalMatching(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		path    string
+		want    bool
+	}{
+		{"bare star means any path", "*", "/anything", true},
+		{"bare star means any path at the root", "*", "/", true},
+		{"string prefix wildcard", "/api*", "/api/users", true},
+		{"string prefix wildcard ignores the boundary", "/api*", "/apifoo", true},
+		{"segment wildcard matches the prefix itself", "/api/*", "/api", true},
+		{"segment wildcard respects the boundary", "/api/*", "/apifoo", false},
+		{"exact match", "/health", "/health", true},
+		{"exact match does not spill over", "/health", "/healthy", false},
+		{"empty pattern matches all", "", "/anything", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := New(Route{Pattern: tt.pattern, Target: "http://hit"})
+			got := r.Match(tt.path) != ""
+			if got != tt.want {
+				t.Errorf("Match(%q) with pattern %q = %v, want %v", tt.path, tt.pattern, got, tt.want)
+			}
+		})
+	}
+}

@@ -4,12 +4,16 @@
 package router
 
 import (
-	"strings"
 	"sync"
+
+	"github.com/7uyash/routa/traffic"
 )
 
 // Route maps a path pattern to a local service target.
 type Route struct {
+	// Pattern uses Routa's canonical path matching, so "/api/*", "*" and "/*"
+	// mean exactly what they mean in mutations, simulations and mocks. See
+	// traffic.MatchPath.
 	Pattern string `json:"pattern" yaml:"pattern"` // e.g. "/api/*", "/*"
 	Target  string `json:"target" yaml:"target"`   // e.g. "http://localhost:3000"
 	Name    string `json:"name,omitempty" yaml:"name,omitempty"`
@@ -68,25 +72,9 @@ func (r *Router) Match(path string) string {
 	defer r.mu.RUnlock()
 
 	for _, route := range r.routes {
-		if matchPattern(route.Pattern, path) {
+		if traffic.MatchPath(route.Pattern, path) {
 			return route.Target
 		}
 	}
 	return ""
-}
-
-// matchPattern checks if a path matches a pattern.
-// Supports:
-//   - Exact match: "/api/health" matches "/api/health"
-//   - Wildcard prefix: "/api/*" matches "/api/anything/here"
-//   - Catch-all: "/*" matches everything
-func matchPattern(pattern, path string) bool {
-	if pattern == "/*" {
-		return true
-	}
-	if strings.HasSuffix(pattern, "/*") {
-		prefix := strings.TrimSuffix(pattern, "/*")
-		return strings.HasPrefix(path, prefix+"/") || path == prefix
-	}
-	return pattern == path
 }

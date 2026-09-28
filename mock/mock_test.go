@@ -52,3 +52,55 @@ func TestCreateFromRequest(t *testing.T) {
 		t.Errorf("unexpected body: %s", rule.Body)
 	}
 }
+
+// TestMockUsesCanonicalMatching pins the mock lab to traffic.MatchPath. The
+// mock lab used to have its own matcher that required a non-empty method and
+// path, so a rule created without either of them never fired.
+func TestMockUsesCanonicalMatching(t *testing.T) {
+	pathCases := []struct {
+		name    string
+		pattern string
+		path    string
+		want    bool
+	}{
+		{"exact match", "/api/v1/users", "/api/v1/users", true},
+		{"exact match does not spill over", "/api/v1/users", "/api/v1/users/1", false},
+		{"segment wildcard", "/api/*", "/api/v1", true},
+		{"segment wildcard matches the prefix", "/api/*", "/api", true},
+		{"segment wildcard respects the boundary", "/api/*", "/apifoo", false},
+		{"string prefix wildcard", "/api*", "/apifoo", true},
+		{"bare star matches any path", "*", "/anything", true},
+		{"empty path matches any path", "", "/anything", true},
+	}
+
+	for _, tt := range pathCases {
+		t.Run(tt.name, func(t *testing.T) {
+			lab := NewLab()
+			lab.CreateRule("probe", "GET", tt.pattern, 200, nil, "", 0, true)
+			if got := lab.MatchRequest("GET", tt.path) != nil; got != tt.want {
+				t.Errorf("MatchRequest(GET, %q) with path %q = %v, want %v", tt.path, tt.pattern, got, tt.want)
+			}
+		})
+	}
+
+	methodCases := []struct {
+		name   string
+		method string
+		want   bool
+	}{
+		{"exact method", "GET", true},
+		{"different method", "DELETE", false},
+		{"star matches any method", "*", true},
+		{"empty method matches any method", "", true},
+	}
+
+	for _, tt := range methodCases {
+		t.Run(tt.name, func(t *testing.T) {
+			lab := NewLab()
+			lab.CreateRule("probe", tt.method, "/api/*", 200, nil, "", 0, true)
+			if got := lab.MatchRequest("GET", "/api/users") != nil; got != tt.want {
+				t.Errorf("MatchRequest(GET, /api/users) with method %q = %v, want %v", tt.method, got, tt.want)
+			}
+		})
+	}
+}
