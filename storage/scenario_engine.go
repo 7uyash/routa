@@ -47,9 +47,9 @@ func (sr *ScenarioRecorder) RecordEntry(entry *recorder.Entry) {
 	if !sr.isRecording {
 		return
 	}
-	// Make a shallow copy for recording buffer
-	eCopy := *entry
-	sr.entries = append(sr.entries, &eCopy)
+	// Snapshot so the recording buffer does not share headers, bodies or the
+	// entry's lock with the live entry.
+	sr.entries = append(sr.entries, entry.Snapshot())
 }
 
 // Stop Recording session and return captured entries.

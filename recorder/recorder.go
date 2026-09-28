@@ -27,6 +27,9 @@ func New(maxSize int) *Recorder {
 }
 
 // OnChange registers a callback that fires each time a new entry is recorded.
+//
+// The callback receives the live recorded entry, so it must treat it as
+// read-only and use entry.Snapshot() for anything it needs to keep or modify.
 func (r *Recorder) OnChange(fn func(*Entry)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -35,6 +38,12 @@ func (r *Recorder) OnChange(fn func(*Entry)) {
 
 // Record adds a new entry to the recorder. If the buffer is full, the oldest
 // entry is evicted.
+//
+// Record takes ownership of the pointer. The caller must not write to the
+// entry's plain fields after this call, because the recorder, the dashboard and
+// background workers read them concurrently. The trailing state may still be
+// updated asynchronously through SetShadowResults and SetDiff, which is how
+// shadow.Shadower reports results for traffic that is already on screen.
 func (r *Recorder) Record(entry *Entry) {
 	r.mu.Lock()
 
@@ -91,25 +100,33 @@ func (r *Recorder) List(f Filter) []EntrySummary {
 	return results
 }
 
-// Get returns the full entry by ID, or nil if not found.
+// Get returns a snapshot of the entry by ID, or nil if not found.
+//
+// The returned entry shares no memory with the recorder: mutating it does not
+// change recorded state, and marshalling it cannot race with shadow results
+// still arriving for the original.
 func (r *Recorder) Get(id string) *Entry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for _, e := range r.entries {
 		if e.ID == id {
-			return e
+			return e.Snapshot()
 		}
 	}
 	return nil
 }
 
-// All returns all entries (newest first). Used for session saving.
+// All returns snapshots of all entries (newest first). Used for session
+// saving, API mapping and scenario capture.
+//
+// As with Get, the entries are deep copies and are safe to retain, modify and
+// marshal.
 func (r *Recorder) All() []*Entry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	result := make([]*Entry, len(r.entries))
 	for i, e := range r.entries {
-		result[len(r.entries)-1-i] = e
+		result[len(r.entries)-1-i] = e.Snapshot()
 	}
 	return result
 }
